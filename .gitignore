@@ -1,0 +1,25 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.claude/
+.runtime/
+
+# Go
+platform/go-server/bin/
+platform/go-server/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Local-only files
+.codex-tmp/
+/方案/
+/数据库备份/
+/cookies.txt

@@ -1,0 +1,5 @@
+{
+  "name": "Machining ERP",
+  "description": "A lightweight ERP system for micro-machining workshops to manage orders, production, inventory, and finance.",
+  "requestFramePermissions": []
+}

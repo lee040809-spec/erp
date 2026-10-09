@@ -1,0 +1,68 @@
+/* Shared production and order interaction language. */
+body {font-family:Inter,"Microsoft YaHei","PingFang SC",system-ui,sans-serif;color:#17243b;background:#f3f6fb;}
+button {cursor:pointer;}
+button:disabled {cursor:default;}
+button,input,select,textarea {transition:background-color .15s,border-color .15s,box-shadow .15s;}
+button:focus-visible {outline:3px solid #93c5fd;outline-offset:3px;}
+.erp-sidebar {width:244px;display:flex;flex-direction:column;background:linear-gradient(160deg,#15243e,#0f1b30);height:100%;flex-shrink:0;z-index:50;position:relative;transition:width .18s;}
+.erp-sidebar.is-collapsed {width:80px;}
+.erp-sidebar > div {flex-shrink:0;}
+/* Native scrolling stays inside the menu; the header and account settings stay fixed. */
+.erp-sidebar > nav {color-scheme:dark;overscroll-behavior-y:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:#334155 transparent;}
+.erp-sidebar > nav:hover,.erp-sidebar > nav:focus-within {scrollbar-color:#64748b transparent;}
+.erp-sidebar > nav::-webkit-scrollbar {width:6px;}
+.erp-sidebar > nav::-webkit-scrollbar-track {background:transparent;}
+.erp-sidebar > nav::-webkit-scrollbar-thumb {background:#334155;border-radius:999px;}
+.erp-sidebar > nav:hover::-webkit-scrollbar-thumb,.erp-sidebar > nav:focus-within::-webkit-scrollbar-thumb {background:#64748b;}
+.erp-sidebar > nav::-webkit-scrollbar-button {display:none;width:0;height:0;}
+.erp-nav {display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border-radius:12px;color:#a9bad2;font-size:13px;text-align:left;}
+.erp-nav:hover {background:#ffffff0c;color:white;}
+.erp-nav.is-active {background:#2563eb;color:white;box-shadow:0 4px 15px #030f2b40;}
+.erp-page {background:radial-gradient(ellipse at top right,#eaf0ff70,transparent 60%),#f3f6fb;padding:28px;overflow-y:auto;min-height:0;flex:1;}
+.erp-card {background:white;border:1px solid #e3eaf4;border-radius:18px;box-shadow:0 3px 12px #23355a04;}
+.erp-input {width:100%;border:1px solid #dce4ef;border-radius:10px;padding:9px 12px;background:white;color:#26374c;font-size:13px;min-height:40px;outline:none;}
+.erp-input:focus {border-color:#6098f3;box-shadow:0 0 0 3px #dbeafe;}
+/* Keep search spacing explicit: unlayered input padding overrides utility classes. */
+.erp-workbench-toolbar {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;}
+.erp-workbench-toolbar-heading {flex:1 1 200px;min-width:0;}
+.erp-workbench-search {display:flex;flex:1 1 420px;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;max-width:560px;}
+.erp-workbench-search-field {position:relative;flex:1 1 240px;min-width:0;}
+.erp-workbench-search-field>svg {position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;pointer-events:none;}
+.erp-workbench-search-field>.erp-input {padding-left:36px;min-width:0;}
+.erp-workbench-search>.erp-btn {flex-shrink:0;}
+@media(max-width:639px){.erp-workbench-search{flex-basis:100%;max-width:none;}.erp-workbench-search-field{flex-basis:100%;}}
+.erp-btn {display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:8px 13px;border-radius:10px;border:1px solid #dce4ef;background:white;font-size:13px;font-weight:500;white-space:nowrap;}
+.erp-btn:hover {background:#f4f7fc;border-color:#b5c6df;}
+.erp-btn:disabled {opacity:.4;}
+.erp-primary {background:#2563eb;color:white;border-color:#2563eb;box-shadow:0 3px 8px #2563eb20;}
+.erp-primary:hover {background:#1d4ed8;border-color:#1d4ed8;}
+.erp-danger {background:#e11d48;color:white;border-color:#e11d48;}
+.erp-danger:hover {background:#be123c;border-color:#be123c;}
+.erp-danger:disabled {background:#ffe4e6;color:#9f1239;border-color:#fecdd3;opacity:1;}
+.erp-success {background:#059669;color:white;border-color:#059669;}
+.erp-success:hover {background:#047857;border-color:#047857;}
+.erp-label {font-size:12px;color:#64748b;display:block;}
+.erp-label>.erp-input {margin-top:6px;}
+.erp-overlay {position:fixed;inset:0;background:#0f172a65;backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:70;}
+.erp-dialog {width:100%;max-width:600px;background:white;border-radius:22px;box-shadow:0 24px 80px #0f172a35;max-height:90vh;overflow:auto;}
+.erp-dialog.erp-order-dialog {max-width:1440px;max-height:94vh;}
+.erp-dialog.erp-production-flow-dialog {max-width:1024px;}
+.erp-step {display:inline-flex;align-items:center;gap:6px;border-radius:9px;padding:6px 9px;font-size:12px;border:1px solid;}
+.erp-step-pending {background:#f8fafc;border-color:#e2e8f0;color:#64748b;}
+.erp-step-processing {background:#eff6ff;border-color:#93c5fd;color:#1d4ed8;}
+.erp-step-completed {background:#ecfdf5;border-color:#a7f3d0;color:#047857;}
+@media(max-width:767px){.erp-sidebar{position:fixed;inset:0 auto 0 0;width:244px!important;transform:translateX(-100%);transition:transform .2s;}.erp-sidebar.is-open{transform:translateX(0);}.erp-page{padding:18px 12px;margin-top:56px;}.erp-overlay{padding:12px;}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important;}}
+
+/* Compact lists preserve readable fields and all coloured production statuses. */
+.erp-part-metrics {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px 16px;}
+.erp-part-metrics>div {display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;}
+.erp-part-metrics>div>p {margin-top:0;white-space:nowrap;}
+.erp-part-metrics>div>p:first-child {flex-shrink:0;}
+.erp-part-metrics>div>p.truncate {min-width:0;white-space:normal;overflow-wrap:anywhere;}
+.erp-order-list .erp-btn,.erp-workbench-compact .erp-workbench-task .erp-btn {min-height:30px;padding:4px 9px;font-size:12px;}
+.erp-order-list .erp-step,.erp-workbench-compact .erp-workbench-task .erp-step {padding:3px 7px;gap:4px;border-radius:7px;}
+.erp-workbench-compact .erp-workbench-task>div:first-child {gap:8px;}
+.erp-workbench-compact .erp-workbench-task .mt-1\.5 {margin-top:4px;}
+@media(max-width:479px){.erp-part-metrics{grid-template-columns:1fr;}.erp-part-metrics>div{justify-content:flex-start;gap:12px;}}
+.erp-workbench-order-number {font-weight:600;color:#1d4ed8;font-variant-numeric:tabular-nums;}

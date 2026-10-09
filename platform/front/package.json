@@ -1,0 +1,51 @@
+{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "tsx server.ts",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@mertdeveci55/univer-import-export": "^0.2.1",
+    "@tailwindcss/vite": "^4.1.14",
+    "@univerjs-pro/exchange-client": "^0.20.1",
+    "@univerjs/preset-sheets-advanced": "^0.20.1",
+    "@univerjs/preset-sheets-core": "^0.20.1",
+    "@univerjs/preset-sheets-drawing": "^0.20.1",
+    "@univerjs/presets": "^0.20.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "file-saver": "^2.0.5",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "mysql2": "^3.11.0",
+    "pako": "^2.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.13.1",
+    "vite": "^6.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/file-saver": "^2.0.7",
+    "@types/node": "^22.14.0",
+    "@types/pako": "^2.0.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

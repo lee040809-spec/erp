@@ -1,0 +1,152 @@
+.erp-timeline-dialog {width:min(1180px,calc(100vw - 32px));max-width:1180px;max-height:calc(100dvh - 32px)}
+.erp-gantt {--erp-gantt-label-width:180px;background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.erp-gantt-toolbar {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:8px 10px;border-bottom:1px solid #eef2f6}
+.erp-gantt-legends,.erp-gantt-controls {display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px;color:#64748b}
+.erp-gantt-legends {gap:10px}
+.erp-gantt-controls .erp-btn {min-height:30px;padding:4px 7px;font-size:11px;border-radius:7px}
+.erp-gantt-controls .erp-input {width:auto;min-height:30px;padding:4px 6px;font-size:12px;border-radius:7px}
+.erp-gantt-range-note {flex-basis:100%;font-size:11px;color:#64748b;margin:0;line-height:16px}
+.erp-gantt-scroll {overflow-x:auto;max-height:620px;overflow-y:auto;position:relative}
+.erp-gantt-axis,.erp-gantt-row {display:flex;position:relative;border-bottom:1px solid #eef2f6}
+.erp-gantt-axis {position:sticky;top:0;height:32px;z-index:6;background:#f8fafc;align-items:center}
+.erp-gantt-label {width:var(--erp-gantt-label-width);min-width:var(--erp-gantt-label-width);flex-shrink:0;position:sticky;left:0;background:#fff;z-index:3;padding:4px 8px;border-right:1px solid #e2e8f0}
+.erp-gantt-axis .erp-gantt-label {background:#f8fafc;font-size:11px}
+.erp-gantt-day-tick {text-align:center;border-left:1px solid #eef2f6;padding:7px 0;font-size:11px;color:#64748b;overflow:hidden}
+.erp-gantt-track {height:44px;position:relative;flex-shrink:0;overflow:hidden;display:block;background:linear-gradient(to right,#eef2f6 1px,transparent 1px)}
+.erp-gantt-bar {position:absolute;height:16px;min-width:3px;border-radius:3px;pointer-events:auto;overflow:hidden}
+.erp-gantt-bar-date {position:absolute;right:3px;top:0;font-size:10px;line-height:14px;white-space:nowrap;color:#1e3a8a;font-weight:600;z-index:2}
+.erp-gantt-bar-before {position:absolute;left:1px;top:0;font-size:12px;line-height:14px;color:#1e3a8a}
+.erp-gantt-bar.is-continued {border-right:2px dashed #2563eb;border-top-right-radius:0;border-bottom-right-radius:0}
+.erp-gantt-planned {background:#bfdbfe;border:1px solid #60a5fa}
+.erp-gantt-running {background:#fcd34d;border:1px solid #f59e0b}
+.erp-gantt-completed {background:#6ee7b7;border:1px solid #10b981}
+.erp-gantt-bar.is-late {border-color:#e11d48}
+.erp-gantt-planned.is-late {background:#fecdd3}
+.erp-gantt-bar.is-late .erp-gantt-bar-date {color:#9f1239}
+.erp-gantt-overdue-segment {position:absolute;right:0;top:0;height:100%;background:repeating-linear-gradient(135deg,#e11d4840 0,#e11d4840 3px,transparent 3px,transparent 6px)}
+.erp-gantt-row.has-risk .erp-gantt-label {background:#fff7f8;box-shadow:inset 2px 0 #fb7185}
+.erp-gantt-milestone {position:absolute;top:26px;width:11px;height:11px;background:#10b981;transform:rotate(45deg)}
+.erp-gantt-milestone.is-late {background:#e11d48}
+.erp-gantt-today {position:absolute;top:0;bottom:0;width:1px;background:#94a3b8;opacity:.7;pointer-events:none}
+.erp-gantt-due-line {position:absolute;top:0;bottom:0;border-left:2px dashed #e11d48;z-index:1;pointer-events:auto}
+.erp-gantt-legend {display:inline-flex;align-items:center;gap:4px}
+.erp-gantt-legend i {width:12px;height:7px;border-radius:2px;display:inline-block}
+.erp-gantt-legend .erp-gantt-due-legend {width:0;height:11px;border-left:2px dashed #e11d48;border-radius:0}
+.erp-gantt-legend .erp-gantt-late-legend {background:repeating-linear-gradient(135deg,#fb7185 0,#fb7185 2px,#ffe4e6 2px,#ffe4e6 4px)}
+.erp-gantt-group {position:relative;border-top:2px solid #bfdbfe}
+.erp-gantt-group-heading {display:flex;position:sticky;top:32px;z-index:5;min-height:56px;background:#eff6ff;border-bottom:1px solid #dbeafe;box-shadow:inset 3px 0 #3b82f6}
+.erp-gantt-group-toggle {position:sticky;left:0;flex-shrink:0;display:flex;align-items:center;gap:6px;text-align:left;width:min(340px,calc(100vw - 116px));padding:5px 10px;color:#1e3a8a;background:#eff6ff;min-height:56px}
+.erp-gantt-group-toggle:hover {background:#dbeafe}
+.erp-gantt-group-toggle:focus-visible,.erp-gantt-view-part:focus-visible {outline:2px solid #2563eb;outline-offset:-3px}
+.erp-gantt-group-chevron {flex-shrink:0;transition:transform .15s}
+.erp-gantt-group-chevron.is-collapsed {transform:rotate(-90deg)}
+.erp-gantt-part-name {display:block;font-size:13px;line-height:17px;overflow-wrap:anywhere}
+.erp-gantt-part-summary {display:block;font-size:10px;line-height:14px;color:#64748b}
+.erp-gantt-part-due {display:block;font-size:11px;line-height:15px;color:#be123c}
+.erp-gantt-view-part {position:sticky;right:6px;margin-left:auto;align-self:center;flex-shrink:0;color:#2563eb;font-size:11px;padding:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;line-height:16px}
+.erp-gantt-process-label {display:flex;align-items:center;gap:5px;text-align:left;padding-left:12px}
+.erp-gantt-process-label:hover {background:#f8fafc}
+.erp-gantt-process-index {font-size:9px;color:#94a3b8;font-variant-numeric:tabular-nums}
+.erp-gantt-process-info {min-width:0}
+.erp-gantt-process-title {display:flex;align-items:center;gap:3px;font-size:11px;line-height:16px}
+.erp-gantt-process-title strong {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.erp-gantt-state {display:inline-block;flex-shrink:0;font-size:9px;line-height:14px;padding:0 3px;border-radius:3px}
+.erp-gantt-state-pending {color:#64748b;background:#f1f5f9}
+.erp-gantt-state-processing {color:#b45309;background:#fef3c7}
+.erp-gantt-state-completed {color:#047857;background:#d1fae5}
+.erp-gantt-process-dates {display:block;white-space:nowrap;font-size:10px;line-height:14px;color:#64748b;font-variant-numeric:tabular-nums}
+.erp-gantt-empty-node {position:absolute;left:6px;top:5px;font-size:10px;line-height:15px;color:#94a3b8;white-space:nowrap}
+.erp-gantt-risk {position:absolute;left:6px;bottom:2px;font-size:10px;line-height:14px;color:#be123c;background:#fff1f2e6;padding:0 3px;border-radius:3px;z-index:2;white-space:nowrap}
+.erp-gantt-risk.is-unknown {color:#64748b;background:#f8fafce6}
+.erp-gantt-process-dates {font-size:9px}
+.erp-gantt-delivery-row {border-top:1px dashed #c4b5fd;background:#faf5ff}
+.erp-gantt-delivery-row .erp-gantt-label {background:#faf5ff;color:#6d28d9}
+.erp-gantt-delivery-row.has-delivery-risk .erp-gantt-label {box-shadow:inset 2px 0 #fb7185}
+.erp-gantt-delivery-track {height:58px}
+.erp-gantt-delivery-note,.erp-gantt-delivery-plan {position:absolute;left:6px;font-size:10px;line-height:14px;white-space:nowrap;text-align:left;background:#faf5ffe6;padding:0 3px}
+.erp-gantt-delivery-note {top:17px;color:#64748b}
+.erp-gantt-delivery-plan {bottom:1px}
+.erp-gantt-delivery-marker {position:absolute;width:11px;height:11px;transform:translateX(-50%) rotate(45deg);z-index:2}
+.erp-gantt-delivery-marker.is-required {border:2px solid #8b5cf6;background:white}
+.erp-gantt-delivery-marker.is-actual {background:#10b981;border:1px solid #059669}
+.erp-gantt-delivery-marker.is-late {background:#e11d48;border:1px solid #be123c}
+/* Compact only the Gantt view; list controls keep their established layout. */
+.erp-workbench-gantt .erp-workbench-toolbar {padding:8px 10px;gap:6px 10px}
+.erp-workbench-gantt .erp-workbench-toolbar-heading {flex-basis:120px}
+.erp-workbench-gantt .erp-workbench-toolbar-heading p {display:none}
+.erp-workbench-gantt .erp-workbench-search {flex:0 1 420px;gap:6px}
+.erp-workbench-gantt .erp-workbench-search-field {flex:1 1 160px}
+.erp-workbench-gantt .erp-workbench-search .erp-input {min-height:32px;padding-top:5px;padding-bottom:5px}
+.erp-workbench-gantt .erp-workbench-search .erp-btn,.erp-workbench-gantt .erp-workbench-view-switch .erp-btn {min-height:32px;padding:5px 9px;font-size:12px}
+.erp-workbench-gantt .erp-workbench-view-switch {padding:6px 10px}
+.erp-workbench-gantt .erp-workbench-view-switch>span {font-size:10px}
+.erp-workbench-gantt .erp-workbench-stats>.erp-card {padding:10px}
+.erp-workbench-gantt .erp-workbench-stats>.erp-card>p:first-of-type {font-size:23px;margin-top:3px;line-height:26px}
+.erp-workbench-gantt .erp-workbench-stats>.erp-card>p:last-of-type {margin-top:2px}
+.erp-workbench-gantt .erp-workbench-stats>.erp-card>div>span:last-child {padding:4px}
+@media(min-width:1100px){.erp-workbench-gantt .erp-workbench-stats {grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(max-width:639px){
+  .erp-gantt {--erp-gantt-label-width:144px}
+  .erp-timeline-dialog {width:100vw;max-width:100vw;max-height:100dvh;border-radius:0}
+  .erp-gantt-toolbar {padding:6px 8px;gap:6px}
+  .erp-gantt-controls {gap:5px}
+  .erp-gantt-controls .erp-btn,.erp-gantt-controls .erp-input {min-height:36px}
+  .erp-gantt-label {padding:4px 5px}
+  .erp-gantt-process-label {padding-left:7px;gap:3px}
+  .erp-gantt-group-toggle {padding:4px 7px;width:calc(100vw - 116px)}
+  .erp-gantt-view-part {padding:6px 4px;min-height:36px;font-size:10px}
+  .erp-gantt-part-name {font-size:12px;line-height:16px}
+  .erp-gantt-part-summary {font-size:9px}
+  .erp-gantt-part-due {font-size:10px}
+  .erp-gantt-process-title {gap:2px;font-size:10px}
+  .erp-gantt-state {padding:0 2px}
+  .erp-workbench-gantt .erp-workbench-search {flex:1 1 100%;flex-wrap:nowrap;max-width:none}
+  .erp-workbench-gantt .erp-workbench-search-field {flex:1 1 0}
+  .erp-workbench-gantt .erp-workbench-search .erp-btn,.erp-workbench-gantt .erp-workbench-search .erp-input {min-height:40px}
+  .erp-workbench-gantt .erp-workbench-view-switch {gap:6px}
+  .erp-workbench-gantt .erp-workbench-view-switch>span {display:none}
+}
+.erp-gantt-order-number {font-weight:600;color:#1d4ed8;font-variant-numeric:tabular-nums;}
+/* Workbench readability: raise names/dates one step without changing row or column dimensions. */
+.erp-workbench-gantt .erp-gantt-process-title {font-size:12px}
+.erp-workbench-gantt .erp-gantt-process-dates {font-size:10px}
+.erp-workbench-gantt .erp-gantt-day-tick,.erp-workbench-gantt .erp-gantt-range-note,.erp-workbench-gantt .erp-gantt-part-due {font-size:12px}
+.erp-workbench-gantt .erp-gantt-bar-date,.erp-workbench-gantt .erp-gantt-delivery-note,.erp-workbench-gantt .erp-gantt-delivery-plan {font-size:11px}
+/* Keep compact tracks while making supporting explanations easier to read. */
+.erp-workbench-gantt .erp-gantt-state {font-size:10px}
+.erp-workbench-gantt .erp-gantt-part-summary,.erp-workbench-gantt .erp-gantt-empty-node,.erp-workbench-gantt .erp-gantt-risk {font-size:11px}
+.erp-workbench-gantt .erp-gantt-legends,.erp-workbench-gantt .erp-gantt-controls,.erp-workbench-gantt .erp-gantt-controls .erp-btn,.erp-workbench-gantt .erp-gantt-axis .erp-gantt-label,.erp-workbench-gantt .erp-gantt-view-part,.erp-workbench-gantt .erp-gantt-delivery-note,.erp-workbench-gantt .erp-gantt-delivery-plan {font-size:12px}
+.erp-workbench-gantt .erp-gantt-range-note {font-size:13px}
+.erp-workbench-gantt .erp-workbench-view-switch>span {font-size:11px}
+@media(max-width:639px){
+  .erp-workbench-gantt .erp-gantt-process-title,.erp-workbench-gantt .erp-gantt-part-due {font-size:11px}
+  .erp-workbench-gantt .erp-gantt-part-summary {font-size:10px}
+  .erp-workbench-gantt .erp-gantt-view-part {font-size:11px}
+  .erp-workbench-gantt .erp-gantt-process-dates {letter-spacing:-.45px}
+}
+
+/* Workbench vertical scrolling belongs to the page, not a height-limited chart. */
+.erp-workbench-gantt.erp-page {padding:14px 12px 20px}
+.erp-workbench-gantt > header {gap:8px}
+.erp-workbench-gantt > header h2 {font-size:22px;line-height:28px}
+.erp-workbench-gantt > header p:first-child {margin-bottom:2px}
+.erp-workbench-gantt > header p:last-child {margin-top:2px}
+.erp-workbench-gantt .erp-gantt {--erp-gantt-label-width:168px;border-radius:0;border-left:0;border-right:0}
+.erp-workbench-gantt .erp-gantt-scroll {max-height:none;overflow-y:hidden}
+.erp-workbench-gantt .erp-gantt-axis,.erp-workbench-gantt .erp-gantt-group-heading {position:relative;top:auto}
+.erp-workbench-gantt .erp-gantt-group-heading,.erp-workbench-gantt .erp-gantt-group-toggle {min-height:44px}
+@media(min-width:1100px){
+  .erp-workbench-gantt .erp-gantt-group-toggle {width:min(720px,calc(100% - 82px))}
+  .erp-workbench-gantt .erp-gantt-group-toggle > .min-w-0 {flex:1;display:grid;grid-template-columns:minmax(140px,1fr) auto;gap:2px 12px;align-items:center}
+  .erp-workbench-gantt .erp-gantt-part-due {grid-column:2;grid-row:1 / span 2;white-space:nowrap}
+  .erp-workbench-gantt .erp-gantt-part-summary {grid-column:1}
+}
+@media(max-width:767px){
+  .erp-workbench-gantt.erp-page {padding:10px 8px calc(20px + env(safe-area-inset-bottom))}
+}
+@media(max-width:639px){
+  .erp-workbench-gantt .erp-gantt {--erp-gantt-label-width:144px}
+}
+/* Keep add/delete and full-range actions together at the horizontal viewport edge. */
+.erp-gantt-group-actions {position:sticky;right:6px;margin-left:auto;align-self:center;display:flex;align-items:center;gap:4px;flex-shrink:0;padding-left:4px;background:inherit}
+.erp-gantt-group-actions .erp-gantt-view-part {position:static;margin-left:0}

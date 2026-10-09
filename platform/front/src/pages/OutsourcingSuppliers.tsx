@@ -1,0 +1,23 @@
+import React, { useEffect, useRef, useState } from 'react';
+import type { OutsourcingSupplier, SupplierPage } from '../types/outsourcingOrder';
+import { flowRequest } from '../services/productionFlow';
+
+const empty = { name: '', contact_name: '', phone: '', address: '', capabilities: '', notes: '', active: true };
+export default function OutsourcingSuppliers({ embedded = false }: { embedded?: boolean }) {
+ const [data,setData]=useState<SupplierPage>({items:[],page:1,has_more:false,can_manage:false}),[page,setPage]=useState(1),[search,setSearch]=useState(''),[query,setQuery]=useState(''),[editing,setEditing]=useState<number|null>(null),[form,setForm]=useState(empty),[error,setError]=useState(''),[message,setMessage]=useState(''),[saving,setSaving]=useState(false);
+ const busy=useRef(false);
+ const load=async()=>setData(await flowRequest<SupplierPage>(`/outsourcing-suppliers?page=${page}&pageSize=30&search=${encodeURIComponent(query)}`));
+ useEffect(()=>{let active=true;flowRequest<SupplierPage>(`/outsourcing-suppliers?page=${page}&pageSize=30&search=${encodeURIComponent(query)}`).then(d=>{if(active){setData(d);setError('')}}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[page,query]);
+ const edit=(s?:OutsourcingSupplier)=>{setEditing(s?.id||0);setForm(s?{...s}:empty);setError('');setMessage('')};
+ return <section className={embedded?'space-y-4':'erp-page space-y-4 p-4 md:p-6'}>
+  <header className="flex flex-wrap justify-between items-center gap-3"><div><h2 className="text-xl font-bold text-slate-900">外协供应商管理</h2><p className="text-xs text-slate-500 mt-1">维护联系人和加工能力；停用后保留历史订单、回厂与对账记录。</p></div>{data.can_manage&&<button className="erp-btn erp-primary" onClick={()=>edit()}>新增供应商</button>}</header>
+  <form className="flex gap-2" role="search" aria-label="供应商查询" onSubmit={e=>{e.preventDefault();setPage(1);setQuery(search.trim())}}><input className="erp-input flex-1 min-w-0" aria-label="搜索供应商" placeholder="供应商 / 联系人 / 电话 / 加工能力" value={search} onChange={e=>setSearch(e.target.value)}/><button className="erp-btn">查询</button></form>
+  {editing!==null&&<form className="erp-card p-3 space-y-3" onSubmit={async e=>{e.preventDefault();if(busy.current)return;busy.current=true;setSaving(true);setError('');try{await flowRequest(`/outsourcing-suppliers${editing?`/${editing}`:''}`,editing?'PATCH':'POST',form);setEditing(null);setMessage('供应商资料已保存');await load()}catch(e){setError((e as Error).message)}finally{busy.current=false;setSaving(false)}}}>
+   <h3 className="font-semibold">{editing?'编辑供应商':'新增供应商'}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{([['name','供应商名称',100],['contact_name','联系人',100],['phone','联系电话',60],['capabilities','加工能力 / 可承接工序',300],['address','地址',300],['notes','备注',500]] as const).map(([key,label,max])=><label className="erp-label" key={key}>{label}{key==='name'?' *':''}<input className="erp-input" required={key==='name'} maxLength={max} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}</div>
+   <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={e=>setForm({...form,active:e.target.checked})}/>启用（停用后不能新增外协下单或发出，已有回厂和对账继续处理）</label><div className="flex gap-2"><button className="erp-btn erp-primary" disabled={saving}>保存供应商</button><button type="button" className="erp-btn" disabled={saving} onClick={()=>setEditing(null)}>取消编辑</button></div>
+  </form>}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">{data.items.map(s=><article key={s.id} className="erp-card p-3 space-y-2"><div className="flex justify-between gap-2"><strong className="text-sm break-words">{s.name}</strong><span className={`text-xs shrink-0 ${s.active?'text-emerald-600':'text-slate-400'}`}>{s.active?'启用':'停用'}</span></div><p className="text-xs text-slate-600 break-words">{s.contact_name||'未填联系人'} · {s.phone||'未填电话'}</p><p className="text-xs text-slate-500 break-words">加工能力：{s.capabilities||'未填写'}</p>{s.address&&<p className="text-xs text-slate-500 break-words">{s.address}</p>}{s.notes&&<p className="text-xs text-slate-500 break-words">{s.notes}</p>}{data.can_manage&&<button className="erp-btn" onClick={()=>edit(s)}>编辑 / 启停</button>}</article>)}</div>
+  {!data.items.length&&<p className="text-sm text-slate-400">暂无符合条件的供应商。</p>}<div className="flex items-center gap-3 text-xs"><button className="erp-btn" disabled={page<=1} onClick={()=>setPage(p=>p-1)}>上一页</button><span>第 {page} 页</span><button className="erp-btn" disabled={!data.has_more} onClick={()=>setPage(p=>p+1)}>下一页</button></div>
+  {error&&<p role="alert" className="text-rose-600 text-sm">{error}</p>}{message&&<p role="status" className="text-emerald-600 text-sm">{message}</p>}
+ </section>;
+}
