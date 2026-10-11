@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import React from 'react';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import ProcessGanttChart from '../src/components/ProcessGanttChart';
 import { processDate } from '../src/utils/processDates';

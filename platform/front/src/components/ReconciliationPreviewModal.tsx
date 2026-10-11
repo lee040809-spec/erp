@@ -1,18 +1,15 @@
+import PrintTemplateFieldButtons from './PrintTemplateFieldButtons';
+import { printItemFields as itemFields } from '../configs/printTemplateFields';
 import { formatAmount } from '../utils/money';
-import React, { useEffect, useState, useRef } from 'react';
-import { X, Info, Plus, Download } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Info, Download } from 'lucide-react';
 import { Order } from '../types';
 import { authFetch } from './shared';
 import UniverSheet from './UniverSheet';
-import pako from 'pako';
+import { encodePrintTemplate } from '../utils/templateCodec';
+import { usePrintWorkbook, usePrintPreview } from '../hooks/usePrintPreview';
 import { exportUniverToExcel } from '../utils/univerExport';
-import {
-  getFieldValue,
-  replaceReconciliationOrderPlaceholders,
-  replaceItemPlaceholders,
-  hasItemPlaceholder,
-  hasOrderPlaceholder
-} from '../utils/templateReplace';
+import { replaceReconciliationOrderPlaceholders, replaceItemPlaceholders } from '../utils/templateReplace';
 
 interface PrintTemplate {
   id: number;
@@ -52,20 +49,6 @@ const otherFields = [
   { key: 'other.reconciliation_number', label: '对账单号' },
 ];
 
-// 零件字段列表（带#前缀表示列表变量）
-const itemFields = [
-  { key: 'items.row_index', label: '序号', isList: true },
-  { key: 'items.part_name', label: '零件名称', isList: true },
-  { key: 'items.part_number', label: '零件号', isList: true },
-  { key: 'items.quantity', label: '数量', isList: true },
-  { key: 'items.unit_price', label: '单价', isList: true },
-  { key: 'items.total_price', label: '总计', isList: true },
-  { key: 'items.completion_date', label: '完工日期', isList: true },
-  { key: 'items.delivered_quantity', label: '交货数量', isList: true },
-  { key: 'items.scrap_quantity', label: '报废数量', isList: true },
-  { key: 'items.notes', label: '零件备注', isList: true },
-];
-
 const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
   orders,
   template,
@@ -76,64 +59,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
 }) => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const univerRef = useRef<any>(null);
-  const [sheetData, setSheetData] = useState<any>(null);
-
-  // 加载模板数据
-  useEffect(() => {
-    if (!template?.template) return;
-
-    try {
-      let workbookData: any;
-      const templateStr = template.template;
-
-      // 检查数据格式
-      if (templateStr.startsWith('UNIVER:')) {
-        // 新格式：gzip压缩的Univer workbook数据
-        const base64 = templateStr.substring(7);
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const decompressed = pako.inflate(bytes, { to: 'string' });
-        workbookData = JSON.parse(decompressed);
-      } else if (templateStr.startsWith('GZIP:')) {
-        // 旧格式：gzip压缩数据
-        const base64 = templateStr.substring(5);
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const decompressed = pako.inflate(bytes, { to: 'string' });
-        workbookData = JSON.parse(decompressed);
-      } else {
-        // 直接JSON或其他格式
-        workbookData = JSON.parse(templateStr);
-      }
-
-      // 只设置原始模板数据，不预处理
-      setSheetData(workbookData);
-    } catch (err) {
-      // 解析失败，静默处理
-    }
-  }, [template?.template]);
-
-  // preview 模式下，使用 Univer API 填充数据
-  useEffect(() => {
-    if (mode !== 'preview' || !orderData || !univerRef.current) return;
-
-    // 等待 Univer ready
-    const checkReady = () => {
-      if (univerRef.current?.isReady?.()) {
-        fillDataWithUniverAPI();
-      } else {
-        setTimeout(checkReady, 100);
-      }
-    };
-    checkReady();
-  }, [mode, orderData, sheetData]);
-
+  const { workbook: sheetData, error: templateError } = usePrintWorkbook(template?.template);
   // 使用 Univer API 填充数据
   const fillDataWithUniverAPI = () => {
     if (!univerRef.current || !orderData) {
@@ -324,10 +250,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
     }
 
     try {
-      const workbookJson = JSON.stringify(workbookData);
-      const compressed = pako.gzip(workbookJson);
-      const base64 = btoa(String.fromCharCode(...compressed));
-      const compressedData = 'UNIVER:' + base64;
+      const compressedData = encodePrintTemplate(workbookData);
 
       const res = await authFetch(`/api/platform/print-templates/${template.id}`, {
         method: 'PATCH',
@@ -346,9 +269,11 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
     }
   };
 
+  usePrintPreview(mode, orderData, sheetData, univerRef, fillDataWithUniverAPI);
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
       <div className="bg-white rounded-2xl shadow-xl w-[95vw] h-[90vh] overflow-hidden flex flex-col relative">
+        {templateError && <p role="alert" className="bg-rose-50 p-3 text-sm text-rose-700">{templateError}</p>}
         {/* 头部 */}
         <div className="p-4 border-b border-zinc-200 flex justify-between items-center">
           <div className="flex items-center gap-4">
@@ -423,17 +348,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
                   </span>
                 </h4>
                 <div className="space-y-1">
-                  {orderFields.map(field => (
-                    <button
-                      key={field.key}
-                      onClick={() => handleFieldClick(field)}
-                      className="inline-flex items-center gap-2 px-2 py-1.5 bg-white rounded-lg border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 transition-colors whitespace-nowrap w-[280px]"
-                    >
-                      <Plus className="w-3 h-3 text-zinc-400" />
-                      <span className="text-xs text-zinc-700">{field.label}</span>
-                      <code className="text-[10px] text-zinc-400 ml-2">{"{{" + field.key + "}}"}</code>
-                    </button>
-                  ))}
+                  <PrintTemplateFieldButtons fields={orderFields} onSelect={handleFieldClick} tone="order"/>
                 </div>
               </div>
 
@@ -444,17 +359,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
                   <span className="text-[10px] text-purple-600">(计算字段)</span>
                 </h4>
                 <div className="space-y-1">
-                  {otherFields.map(field => (
-                    <button
-                      key={field.key}
-                      onClick={() => handleFieldClick(field)}
-                      className="inline-flex items-center gap-2 px-2 py-1.5 bg-white rounded-lg border border-purple-200 hover:bg-purple-50 hover:border-purple-300 transition-colors whitespace-nowrap w-[280px]"
-                    >
-                      <Plus className="w-3 h-3 text-purple-400" />
-                      <span className="text-xs text-zinc-700">{field.label}</span>
-                      <code className="text-[10px] text-purple-500 ml-2">{"{{" + field.key + "}}"}</code>
-                    </button>
-                  ))}
+                  <PrintTemplateFieldButtons fields={otherFields} onSelect={handleFieldClick} tone="other"/>
                 </div>
               </div>
 
@@ -472,17 +377,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
                   <span className="text-[10px] text-amber-600">(列表变量)</span>
                 </h4>
                 <div className="space-y-1">
-                  {itemFields.map(field => (
-                    <button
-                      key={field.key}
-                      onClick={() => handleFieldClick(field)}
-                      className="inline-flex items-center gap-2 px-2 py-1.5 bg-white rounded-lg border border-amber-200 hover:bg-amber-50 hover:border-amber-300 transition-colors whitespace-nowrap w-[280px]"
-                    >
-                      <Plus className="w-3 h-3 text-amber-400" />
-                      <span className="text-xs text-zinc-700">{field.label}</span>
-                      <code className="text-[10px] text-amber-500 ml-2">{"{{#" + field.key + "}}"}</code>
-                    </button>
-                  ))}
+                  <PrintTemplateFieldButtons fields={itemFields} onSelect={handleFieldClick} tone="item"/>
                 </div>
               </div>
 

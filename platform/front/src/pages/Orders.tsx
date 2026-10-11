@@ -34,30 +34,7 @@ interface OrdersProps {
   onReturnToWorkbench?: () => void;
 }
 
-const Orders: React.FC<OrdersProps> = ({
-  orders,
-  setOrders,
-  orderFilters,
-  setOrderFilters,
-  appliedOrderFilters,
-  setAppliedOrderFilters,
-  currentPage,
-  setCurrentPage,
-  pageSize,
-  setPageSize,
-  orderTotal,
-  resetAndOpenModal,
-  editOrder,
-  deleteOrder,
-  setShowDrawingModal,
-  handleProcessClick,
-  getOrderMaxDueDate,
-  fetchData,
-  fetchOrdersWithFilters,
-  hideCostFields = false,
-  navigationTarget,
-  onReturnToWorkbench
-}) => {
+const Orders: React.FC<OrdersProps> = ({ orders, orderFilters, setOrderFilters, appliedOrderFilters, setAppliedOrderFilters, currentPage, setCurrentPage, pageSize, setPageSize, orderTotal, resetAndOpenModal, editOrder, deleteOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false, navigationTarget, onReturnToWorkbench }) => {
   const [isSearching, setIsSearching] = React.useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [deletingOrder, setDeletingOrder] = React.useState<Order | null>(null);

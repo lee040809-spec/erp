@@ -1,15 +1,16 @@
-import React,{useRef,useState} from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {FlowData} from '../types/productionFlow';
 import type {OutsourcingOrder} from '../types/outsourcingOrder';
 import {flowDate,flowRequest,flowToday,withRequestID} from '../services/productionFlow';
 import OutsourcingSupplierPicker from './OutsourcingSupplierPicker';
-export default function OutsourcingOrderEditor({data,initial,onSaved,onClose,defaultOpen,refresh=0}:{data:FlowData;initial?:OutsourcingOrder;onSaved:()=>Promise<void>;onClose:()=>void;defaultOpen:boolean;refresh?:number}){
+export default function OutsourcingOrderEditor({data,initial,onSaved,onClose,defaultOpen,refresh=0,onBusyChange}:{data:FlowData;initial?:OutsourcingOrder;onSaved:()=>Promise<void>;onClose:()=>void;defaultOpen:boolean;refresh?:number;onBusyChange?:(busy:boolean)=>void}){
  const [supplier,setSupplier]=useState(String(initial?.supplier_id||'')),[scope,setScope]=useState<'full'|'selected'>(initial?.scope||'selected'),[batch,setBatch]=useState(String(initial?.delivery_batch_id||''));
  const [quantity,setQuantity]=useState(String(initial?.lines[0]?.quantity||data.flow.item.production_quantity||data.flow.item.quantity)),[price,setPrice]=useState(initial?.unit_price||'0');
  const [lines,setLines]=useState<Record<number,{quantity:string;price:string}>>(()=>Object.fromEntries((initial?.lines||[]).map(l=>[l.order_process_id,{quantity:String(l.quantity),price:l.unit_price||'0'}])));
  const [date,setDate]=useState(initial?flowDate(initial.order_date):flowToday()),[expected,setExpected]=useState(flowDate(initial?.expected_return_date)||flowDate(data.flow.item.due_date)||flowToday()),[notes,setNotes]=useState(initial?.notes||'');
  const [error,setError]=useState(''),[saving,setSaving]=useState(false);
 
+ useEffect(()=>{onBusyChange?.(saving);return()=>onBusyChange?.(false)},[saving,onBusyChange]);
  const itemID=data.flow.item.id,processes=data.flow.processes.filter(p=>p.name!=='送货');
  const pending=useRef({signature:'',id:''}),busy=useRef(false);
  const save=async(payload:object)=>{if(busy.current)return;busy.current=true;setSaving(true);setError('');try{

@@ -43,7 +43,7 @@ func protectPostedItem(tx *gorm.DB, corpID, itemID int64) error {
 	if count > 0 {
 		return ErrPostedOrder
 	}
-	if err := tx.Model(&models.OrderProcess{}).Where("corp_id=? AND order_item_id=? AND (actual_start_at IS NOT NULL OR actual_end_at IS NOT NULL)", corpID, itemID).Count(&count).Error; err != nil {
+	if err := tx.Unscoped().Model(&models.OrderProcess{}).Where("corp_id=? AND order_item_id=? AND (actual_start_at IS NOT NULL OR actual_end_at IS NOT NULL)", corpID, itemID).Count(&count).Error; err != nil {
 		return err
 	}
 	if count > 0 {

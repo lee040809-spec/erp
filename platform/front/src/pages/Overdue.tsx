@@ -22,23 +22,7 @@ interface OverdueProps {
   hideCostFields?: boolean;
 }
 
-const Overdue: React.FC<OverdueProps> = ({
-  orders,
-  orderTotal,
-  overdueFilters,
-  setOverdueFilters,
-  overduePage,
-  setOverduePage,
-  overduePageSize,
-  setOverduePageSize,
-  editOrder,
-  setShowDrawingModal,
-  handleProcessClick,
-  getOrderMaxDueDate,
-  fetchData,
-  fetchOrdersWithFilters,
-  hideCostFields = false
-}) => {
+const Overdue: React.FC<OverdueProps> = ({ orders, orderTotal, overdueFilters, setOverdueFilters, overduePage, setOverduePage, overduePageSize, setOverduePageSize, editOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false }) => {
   const [isSearching, setIsSearching] = React.useState(false);
 
   const applied = React.useRef(overdueFilters);

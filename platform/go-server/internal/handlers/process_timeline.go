@@ -41,6 +41,11 @@ func (h *ProcessTimelineHandler) List(c *gin.Context) {
 		response.InternalError(c, response.CodeInternal, "读取工序时间失败")
 		return
 	}
+	archived := []models.OrderProcess{}
+	if err = h.db.Unscoped().Omit("outsourcing_fee").Where("order_item_id=? AND corp_id=? AND deleted_at IS NOT NULL", itemID, corp).Order("deleted_at DESC,id DESC").Limit(100).Find(&archived).Error; err != nil {
+		response.InternalError(c, response.CodeInternal, "读取历史工序失败")
+		return
+	}
 	events := []models.ProcessTimeEvent{}
 	if err = h.db.Where("order_item_id=? AND corp_id=?", itemID, corp).Order("id DESC").Limit(50).Find(&events).Error; err != nil {
 		response.InternalError(c, response.CodeInternal, "读取时间修改记录失败")
@@ -51,7 +56,7 @@ func (h *ProcessTimelineHandler) List(c *gin.Context) {
 		response.InternalError(c, response.CodeInternal, "读取送货节点失败")
 		return
 	}
-	response.Success(c, gin.H{"processes": withoutAmounts(processes), "events": events, "delivery": deliveries[itemID], "start_date": item.StartDate, "due_date": item.DueDate, "quantity": item.Quantity, "can_manage": h.canWrite(c), "timezone": "Asia/Shanghai"})
+	response.Success(c, gin.H{"archived_processes": withoutAmounts(archived), "processes": withoutAmounts(processes), "events": events, "delivery": deliveries[itemID], "start_date": item.StartDate, "due_date": item.DueDate, "quantity": item.Quantity, "can_manage": h.canWrite(c), "timezone": "Asia/Shanghai"})
 }
 
 type timelineRequest struct {

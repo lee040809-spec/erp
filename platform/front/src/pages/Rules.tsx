@@ -18,7 +18,7 @@ interface RulesProps {
     setDeletingRuleId: (id: number | null) => void;
     fetchData: () => void;
 }
-const Rules: React.FC<RulesProps> = ({ adventRules, ruleFilters, setRuleFilters, editingRuleId, setEditingRuleId, ruleForm, setRuleForm, setShowRuleModal, setDeletingRuleId, fetchData }) => {
+const Rules: React.FC<RulesProps> = ({ adventRules, ruleFilters, setRuleFilters, setEditingRuleId, setRuleForm, setShowRuleModal, setDeletingRuleId, fetchData }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const handleRefresh = async () => {
         setIsRefreshing(true);

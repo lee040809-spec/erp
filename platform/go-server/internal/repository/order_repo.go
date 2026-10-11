@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"machining-erp/internal/productionflow"
 	"time"
 
@@ -98,14 +99,18 @@ func (r *OrderRepository) Create(order *models.Order, items []models.OrderItem, 
 }
 
 // handleProcesses 处理已存在订单项的工序更新逻辑
-func handleProcesses(tx *gorm.DB, itemID, corpID int64, processes []models.OrderProcess, actor int64, planProvided map[int64]bool) error {
+func handleProcesses(tx *gorm.DB, itemID, corpID int64, processes []models.OrderProcess, actor int64, planProvided map[int64]bool, changes ...RouteChangeOptions) error {
+	var change RouteChangeOptions
+	if len(changes) > 0 {
+		change = changes[0]
+	}
 	tracked, err := productionflow.Enabled(tx, corpID, itemID)
 	if err != nil {
 		return err
 	}
 	// 获取旧的工序ID
 	var oldProcessIDs []int64
-	if err := tx.Model(&models.OrderProcess{}).Where("order_item_id = ? AND corp_id=?", itemID, corpID).Pluck("id", &oldProcessIDs).Error; err != nil {
+	if err := tx.Model(&models.OrderProcess{}).Where("order_item_id = ? AND corp_id=?", itemID, corpID).Order("sort_order,id").Pluck("id", &oldProcessIDs).Error; err != nil {
 		return err
 	}
 	oldSet := map[int64]bool{}
@@ -115,30 +120,58 @@ func handleProcesses(tx *gorm.DB, itemID, corpID int64, processes []models.Order
 
 	// 收集前端传来的工序ID
 	newProcessIDs := make(map[int64]bool)
+	newProcessNames := make(map[int64]string)
 	for _, p := range processes {
 		if p.ID != 0 {
 			if !oldSet[p.ID] {
 				return ErrOrderScope
 			}
 			newProcessIDs[p.ID] = true
+			newProcessNames[p.ID] = p.Name
 		}
 	}
 
 	// Validate deletions before route changes, retaining the original actual-time error.
 	for _, oldPID := range oldProcessIDs {
 		if !newProcessIDs[oldPID] {
-			if err := protectTimedProcess(tx, corpID, oldPID); err != nil {
+			if err := protectTimedProcess(tx, corpID, oldPID); err != nil && (!change.AllowProcessedChanges || !errors.Is(err, ErrTimedProcess)) {
 				return err
 			}
 		}
 	}
-	if err := productionflow.GuardRoute(tx, corpID, itemID, processes); err != nil {
+	if err := productionflow.GuardRoute(tx, corpID, itemID, processes, change.AllowProcessedChanges); err != nil {
 		return err
 	}
 	// 删除不再存在的工序
 	for _, oldPID := range oldProcessIDs {
 		if !newProcessIDs[oldPID] {
-			if err := tx.Where("corp_id=?", corpID).Delete(&models.OrderProcess{}, oldPID).Error; err != nil {
+			var previous models.OrderProcess
+			if err := tx.Where("id=? AND corp_id=? AND order_item_id=?", oldPID, corpID, itemID).Take(&previous).Error; err != nil {
+				return err
+			}
+			after := previous
+			for i, id := range oldProcessIDs {
+				if id != oldPID {
+					continue
+				}
+				for _, nextID := range oldProcessIDs[i+1:] {
+					if newProcessIDs[nextID] && newProcessNames[nextID] != "送货" {
+						anchor := nextID
+						after.RetiredBeforeID = &anchor
+						break
+					}
+				}
+				break
+			}
+			after.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+			reason := change.Reason
+			if reason == "" {
+				reason = "订单编辑移除工序；保留原有工序历史"
+			}
+			if err := RecordProcessTimeEvent(tx, previous, after, actor, "route", reason); err != nil {
+				return err
+			}
+			if err := tx.Model(&previous).Update("deleted_at", after.DeletedAt.Time).Error; err != nil {
 				return err
 			}
 		}
@@ -185,7 +218,7 @@ func handleProcesses(tx *gorm.DB, itemID, corpID int64, processes []models.Order
 			if previous.Name != processes[j].Name || previous.SortOrder != j || previous.IsOutsourced != processes[j].IsOutsourced {
 				after := previous
 				after.Name, after.SortOrder, after.IsOutsourced = processes[j].Name, j, processes[j].IsOutsourced
-				if err := RecordProcessTimeEvent(tx, previous, after, actor, "route", "工艺调整；保留工序编号及已有实际生产记录"); err != nil {
+				if err := RecordProcessTimeEvent(tx, previous, after, actor, "route", routeChangeReason(change)); err != nil {
 					return err
 				}
 			}

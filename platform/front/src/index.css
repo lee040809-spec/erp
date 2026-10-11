@@ -2,6 +2,7 @@
 @import "tailwindcss";
 @import "./mobile.css";
 @import "./process-timeline.css";
+@import "./order-form.css";
 .erp-order-item[data-workbench-source="true"] {background:#eff6ff;box-shadow:inset 3px 0 #3b82f6;scroll-margin-top:80px;}
 
 @theme {

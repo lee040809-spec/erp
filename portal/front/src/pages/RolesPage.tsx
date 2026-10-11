@@ -1,3 +1,4 @@
+import { fetchPortalCompanies } from '../services/companies';
 import React, { useState, useEffect } from 'react';
 import { Shield, Plus, Edit, Trash2, X, Check } from 'lucide-react';
 import { Role, Resource, Company } from '../types';
@@ -7,7 +8,7 @@ const RolesPage: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [formData, setFormData] = useState({
@@ -48,9 +49,7 @@ const RolesPage: React.FC = () => {
 
   const fetchCompanies = async () => {
     try {
-      const res = await authFetch('/api/portal/companies');
-      const data = await res.json();
-      setCompanies(Array.isArray(data) ? data : []);
+      setCompanies(await fetchPortalCompanies());
     } catch (err) {
       console.error('Failed to fetch companies:', err);
     }

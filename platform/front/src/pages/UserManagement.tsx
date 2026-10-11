@@ -8,7 +8,7 @@ interface UserManagementProps {
   onNewUser?: () => void;
 }
 
-const UserManagement: React.FC<UserManagementProps> = ({ onNewUser }) => {
+const UserManagement: React.FC<UserManagementProps> = () => {
   const [users, setUsers] = React.useState<User[]>([]);
   const [roles, setRoles] = React.useState<Role[]>([]);
   const [total, setTotal] = React.useState(0);

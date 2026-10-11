@@ -13,6 +13,7 @@ export interface Customer {
     created_at?: string;
 }
 export interface OrderProcess {
+    deleted_at?: string | null;
     id?: number;
     corp_id?: number;
     order_item_id?: number;

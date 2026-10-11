@@ -140,6 +140,15 @@ func validateChronology(tx *gorm.DB, item models.OrderItem, ps []models.OrderPro
 		SourceType     string
 	}
 	var rows []dayRow
+	losses, err := archivedLosses(tx, item.CorpID, item.ID)
+	if err != nil {
+		return err
+	}
+	anchors := map[int64]int64{}
+	for _, l := range losses {
+		anchors[l.ProcessID] = l.BeforeID
+	}
+	archivedScrap := map[int64]int{}
 	if err := tx.Table("process_quantity_events").Select("COALESCE(DATE_FORMAT(business_date,'%Y-%m-%d'),'') AS day,order_process_id,kind,SUM(quantity) AS quantity,source_type").Where("corp_id=? AND order_item_id=?", item.CorpID, item.ID).Group("business_date,order_process_id,kind,source_type").Order("business_date,order_process_id,kind").Find(&rows).Error; err != nil {
 		return err
 	}
@@ -150,6 +159,7 @@ func validateChronology(tx *gorm.DB, item models.OrderItem, ps []models.OrderPro
 	check := func() error {
 		available := item.ProductionQuantity
 		for _, p := range ps {
+			available -= archivedScrap[p.ID]
 			t := totals[p.ID]
 			if t.StartedQuantity > available || t.CompletedQuantity+t.ScrapQuantity > t.StartedQuantity {
 				return fmt.Errorf("%s数量/日期不守恒：后道开工不得超过截至当天前道已完工数量，完工加报废不得超过已开工数量", p.Name)
@@ -161,6 +171,17 @@ func validateChronology(tx *gorm.DB, item models.OrderItem, ps []models.OrderPro
 	for i, r := range rows {
 		t := totals[r.OrderProcessID]
 		if t == nil {
+			if anchor, retired := anchors[r.OrderProcessID]; retired {
+				if r.Kind == "scrap" {
+					archivedScrap[anchor] += r.Quantity
+				}
+				if i == len(rows)-1 || rows[i+1].Day != r.Day {
+					if err := check(); err != nil {
+						return err
+					}
+				}
+				continue
+			}
 			return errors.New("工序数量台账与当前流程不一致")
 		}
 		switch r.Kind {
@@ -216,7 +237,11 @@ func CompletionReady(tx *gorm.DB, corp, item int64, quantity int, batch *int64, 
 		if err = tx.Table("production_completions").Where("corp_id=? AND order_item_id=? AND status='confirmed'", corp, item).Select("CAST(COALESCE(SUM(qualified_quantity),0) AS SIGNED)").Scan(&confirmed).Error; err != nil {
 			return err
 		}
-		if confirmed+quantity > last.CompletedQuantity {
+		losses, e := archivedLosses(tx, corp, item)
+		if e != nil {
+			return e
+		}
+		if confirmed+quantity > last.CompletedQuantity-terminalLoss(losses) {
 			return errors.New("本次合格数量超过末道工序已完工、尚未确认的数量；请先报末道完工或外协回厂质检")
 		}
 	}
@@ -232,6 +257,23 @@ func CompletionReady(tx *gorm.DB, corp, item int64, quantity int, batch *int64, 
 		if e = tx.Table("production_completions").Where("corp_id=? AND order_item_id=? AND status='confirmed'", corp, item).Select("CAST(COALESCE(SUM(qualified_quantity),0) AS SIGNED)").Scan(&confirmed).Error; e != nil {
 			return e
 		}
+		losses, lossErr := archivedLosses(tx, corp, item)
+		if lossErr != nil {
+			return lossErr
+		}
+		tailIDs := []int64{}
+		for _, l := range losses {
+			if l.BeforeID == 0 {
+				tailIDs = append(tailIDs, l.ProcessID)
+			}
+		}
+		var retiredScrap int
+		if len(tailIDs) > 0 {
+			if e = tx.Model(&models.ProcessQuantityEvent{}).Where("corp_id=? AND order_item_id=? AND order_process_id IN ? AND kind='scrap' AND (business_date<=? OR business_date IS NULL)", corp, item, tailIDs, date).Select("COALESCE(SUM(quantity),0)").Scan(&retiredScrap).Error; e != nil {
+				return e
+			}
+		}
+		available -= retiredScrap
 		if confirmed+quantity > available {
 			return errors.New("合格完工日期早于末道工序数量完工日期")
 		}

@@ -61,7 +61,7 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 	exec("CREATE TEMPORARY TABLE orders (id BIGINT PRIMARY KEY,corp_id BIGINT,order_number VARCHAR(50),customer_name VARCHAR(50),status VARCHAR(20))")
 	exec("CREATE TEMPORARY TABLE order_items (id BIGINT PRIMARY KEY,corp_id BIGINT,order_id BIGINT,part_name VARCHAR(50),quantity INT,scrap_quantity INT,status VARCHAR(20),completion_date DATE NULL,unit_price DECIMAL(15,4),supply_mode VARCHAR(32),currency CHAR(3),tax_inclusive TINYINT,production_quantity INT DEFAULT 0)")
 	exec("CREATE TEMPORARY TABLE order_processes (id BIGINT,corp_id BIGINT,order_item_id BIGINT,name VARCHAR(50),status VARCHAR(20))")
-	workflowtest.Tables(t, db, "production_completions", "order_business_records", "cost_entries")
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records", "cost_entries")
 	exec("INSERT INTO orders VALUES (1,0,'TEST','TEST','processing')")
 	exec("INSERT INTO order_items VALUES (1,0,1,'TEST',100,0,'processing',NULL,20,'self_purchased','CNY',0,0),(2,0,1,'HISTORY',10,2,'delivered','2026-03-01',2,'customer_supplied','CNY',0,0)")
 	h := NewProductionFinanceHandler(db)

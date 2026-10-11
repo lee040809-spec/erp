@@ -64,7 +64,7 @@ func TestWorkbenchTemporaryTables(t *testing.T) {
 		ddl = regexp.MustCompile(",\\s*\\)").ReplaceAllString(ddl, "\n)")
 		exec(strings.Replace(ddl, "CREATE TABLE", "CREATE TEMPORARY TABLE", 1))
 	}
-	workflowtest.Tables(t, db, "production_completions", "order_business_records")
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records")
 	exec("CREATE TEMPORARY TABLE users(id BIGINT,corp_id BIGINT,role_id BIGINT)")
 	exec("CREATE TEMPORARY TABLE permissions(role_id BIGINT,corp_id BIGINT,resource_id BIGINT)")
 	exec("CREATE TEMPORARY TABLE resources(id BIGINT,resource_key VARCHAR(100),status VARCHAR(20) DEFAULT 'active',sort_order INT DEFAULT 0)")
@@ -154,6 +154,19 @@ func TestWorkbenchTemporaryTables(t *testing.T) {
 		t.Fatal("filtered counts incorrect")
 	}
 	call(h.Save, `{"item_ids":[1,2],"assignee":"张师傅","equipment":"加工中心","planned_start":"2026-10-05","planned_end":"2026-10-06","estimated_hours":"4.50"}`, "/", "admin", 200)
+	// Unified workspace reads one scoped plan and keeps writes protected.
+	planCall := func(itemID string, role string, want int) map[string]interface{} {
+		return call(func(c *gin.Context) { c.Params = gin.Params{{Key: "itemId", Value: itemID}}; h.Plan(c) }, "", "/", role, want)
+	}
+	planData := planCall("1", "admin", 200)["data"].(map[string]interface{})
+	savedPlan := planData["plan"].(map[string]interface{})
+	if savedPlan["assignee"] != "张师傅" || savedPlan["equipment"] != "加工中心" || !strings.HasPrefix(savedPlan["planned_start"].(string), "2026-10-05") || savedPlan["estimated_hours"] != "4.50" || planData["can_manage"] != true {
+		t.Fatal("part workspace lost saved plan or write permission")
+	}
+	planCall("3", "admin", 404)
+	planCall("99999", "admin", 404)
+	planCall("bad", "admin", 404)
+	planCall("1", "user", 403)
 	var count int64
 	check(db.Table("production_plans").Where("assignee='张师傅'").Count(&count).Error)
 	if count != 2 {
@@ -179,6 +192,18 @@ func TestWorkbenchTemporaryTables(t *testing.T) {
 		t.Fatal("legacy dashboard must not grant new production writes")
 	}
 	call(h.Save, `{"item_ids":[1],"assignee":"BAD"}`, "/", "user", 403)
+	if planCall("1", "user", 200)["data"].(map[string]interface{})["can_manage"] != false {
+		t.Fatal("view-only dashboard granted plan writes")
+	}
+	exec("INSERT INTO resources(id,resource_key) VALUES(103,'orders')")
+	exec("DELETE FROM permissions")
+	exec("INSERT INTO permissions VALUES(1,0,103)")
+	if planCall("1", "user", 200)["data"].(map[string]interface{})["can_manage"] != false {
+		t.Fatal("orders-only plan read granted production writes")
+	}
+	call(h.Save, `{"item_ids":[1],"assignee":"BAD"}`, "/", "user", 403)
+	exec("DELETE FROM permissions")
+	exec("INSERT INTO permissions VALUES(1,0,2)")
 	exec("INSERT INTO permissions VALUES(1,0,1)")
 	call(h.List, "", "/", "user", 200)
 	// A user's ID must not be used as their role ID when refreshing menus.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LayoutDashboard, Users, Shield, Settings, Building2, Menu, X, LogOut, ChevronDown } from 'lucide-react';
 import { Resource } from '../types';
 

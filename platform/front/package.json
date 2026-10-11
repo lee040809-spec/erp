@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "node scripts/verify-order-prices.cjs && node scripts/verify-process-route.cjs && node scripts/verify-delivery-entry.cjs && node scripts/verify-part-workflow.cjs && node scripts/verify-module-quality.cjs && tsx --tsconfig tsconfig.json scripts/check-process-day-chart.tsx"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

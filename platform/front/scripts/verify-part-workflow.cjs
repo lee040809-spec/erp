@@ -1,0 +1,37 @@
+const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
+const root=path.resolve(__dirname,'..'),ts=require(root+'/node_modules/typescript'),React=require(root+'/node_modules/react');
+let states=[],refs=[],memo=[],effectDeps=[],effects=[],hook=0,r=0,m=0,e=0,closed=0,changed=0;
+const equal=(a,b)=>a&&b&&a.length===b.length&&a.every((v,i)=>Object.is(v,b[i]));
+const react={...React,useState(v){const i=hook++;if(!(i in states))states[i]=typeof v==='function'?v():v;return[states[i],v=>states[i]=typeof v==='function'?v(states[i]):v]},useRef(v){const i=r++;if(!(i in refs))refs[i]={current:v};return refs[i]},useMemo(f,deps){const i=m++;if(!memo[i]||!equal(memo[i].deps,deps))memo[i]={value:f(),deps};return memo[i].value},useCallback(f,deps){return react.useMemo(()=>f,deps)},useEffect(f,deps){const i=e++;if(!equal(effectDeps[i],deps)){effectDeps[i]=deps;effects.push(f)}}};
+function Process(){return null}function Quantity(){return null}function Batch(){return null}function Completion(){return null}function Business(){return null}function Outsourcing(){return null}function Plan(){return null}
+const components={ProcessTimelineModal:Process,ProcessQuantityPanel:Quantity,BatchDeliveryPanel:Batch,CompletionModal:Completion,OrderBusinessModal:Business,OutsourcingPanel:Outsourcing,PartPlanningPanel:Plan};
+let serverFlow,serverBusiness;
+function load(p){const exports={};const code=ts.transpileModule(fs.readFileSync(root+'/src/'+p,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;vm.runInNewContext(code,{exports,Date,Math,Intl,console,window:{confirm:()=>false},require(n){if(n==='react')return react;if(n==='react/jsx-runtime')return require(root+'/node_modules/react/jsx-runtime');if(n==='react/jsx-runtime')return require(root+'/node_modules/react/jsx-runtime');if(n==='lucide-react')return require(root+'/node_modules/lucide-react');if(n.endsWith('partWorkflow'))return rules;if(n.endsWith('productionFlow'))return {flowDate:v=>v?.slice(0,10)||'',flowRequest:async url=>url.includes('/flow')?serverFlow:serverBusiness};if(n.endsWith('.css'))return {};const name=n.split('/').pop();if(components[name])return {__esModule:true,default:components[name]};throw Error('Unexpected dependency '+n)}});return exports}
+let rules=load('utils/partWorkflow.ts');const Workspace=load('components/PartWorkflowModal.tsx').default;
+function flow(overrides={},processes=[{id:1,name:'铣削',status:'completed'}],tracking=false,available=1000){return {flow:{item:{id:523,order_id:142,part_name:'探测器后盖',quantity:1000,production_quantity:1100,qualified_quantity:0,delivered_quantity:0,scrap_quantity:0,due_date:'2026-11-30',...overrides},processes,batches:[],tracking,available_completion:available,events:[]},can_manage:true,can_complete:true,can_settle:true}}
+function nodes(t,p,result=[]){if(Array.isArray(t))t.forEach(x=>nodes(x,p,result));else if(t?.props){if(p(t))result.push(t);nodes(t.props.children,p,result)}return result}
+function text(t){if(typeof t==='string'||typeof t==='number')return String(t);if(Array.isArray(t))return t.map(text).join('');return t?.props?text(t.props.children):''}
+const props={order:{id:142,order_number:'YHS-20261007-001'},itemId:523,initialStep:'process',onClose(){closed++},onChanged(){changed++}};
+function render(){hook=r=m=e=0;effects=[];return Workspace(props)}
+function button(tree,label){const b=nodes(tree,n=>n.type==='button'&&text(n)===label)[0];assert.ok(b,'Missing '+label);return b}
+async function flush(){await new Promise(done=>setImmediate(done))}
+async function run(){
+const reconciled=rules.withBusinessQuantities(flow({quantity:1,production_quantity:1,qualified_quantity:0,delivered_quantity:1}),{qualified_quantity:'1',delivered_quantity:'1'});assert.equal(reconciled.flow.item.qualified_quantity,1);assert.ok(rules.nextPartAction(reconciled).detail.includes('可查看交货记录'));assert.equal(rules.nextPartAction(flow()).step,'completion');assert.ok(rules.nextPartAction(flow(),false).title.includes('单价'));
+assert.equal(rules.nextPartAction(flow({qualified_quantity:500})).step,'delivery');
+assert.equal(rules.nextPartAction(flow({qualified_quantity:1100,delivered_quantity:1000})).step,'records');
+assert.equal(rules.nextPartAction(flow({},[])).step,'process');
+assert.equal(rules.nextPartAction(flow({},[{id:1,name:'铣削',status:'processing'}])).step,'process');
+assert.equal(rules.nextPartAction(flow({},[{id:1,name:'下料',status:'processing'}],true,500)).step,'completion','tracked partial quantities can confirm despite overall process status');
+assert.equal(rules.nextPartAction(flow({qualified_quantity:'500',delivered_quantity:'200'})).step,'delivery','SQL decimal strings');
+serverFlow=flow();serverBusiness={items:[{id:523,price_ready:1}],records:[],completions:[],can_complete:true};
+let tree=render();for(const effect of effects)effect();await flush();tree=render();assert.ok(text(tree).includes('探测器后盖'));assert.equal(nodes(tree,n=>n.type===Process).length,1);
+button(tree,'2 确认合格').props.onClick();tree=render();let completion=nodes(tree,n=>n.type===Completion)[0];assert.ok(completion.props.embedded);assert.equal(nodes(tree,n=>n.type==='section'&&n.props.className==='erp-workflow-pane'&&!n.props.hidden).length,1);
+button(tree,'3 登记交货').props.onClick();tree=render();const delivery=nodes(tree,n=>n.type===Business&&n.props.initialKind==='delivery')[0];assert.ok(delivery.props.embedded);assert.ok(nodes(tree,n=>n.type===Completion).length,'completion stays mounted when switching');
+delivery.props.onNavigate('completion');tree=render();completion=nodes(tree,n=>n.type===Completion)[0];completion.props.onBusyChange(true);tree=render();assert.equal(button(tree,'关闭办理窗口').props.disabled,true);assert.equal(button(tree,'3 登记交货').props.disabled,true);completion.props.onBusyChange(false);
+serverFlow=flow({qualified_quantity:500});await completion.props.onSuccess();tree=render();assert.equal(changed,1);assert.ok(text(tree).includes('已有合格件，可以登记交货'));button(tree,'办理下一步').props.onClick();tree=render();assert.equal(nodes(tree,n=>n.type==='button'&&n.props['aria-current']==='step').map(text)[0],'3 登记交货');
+button(tree,'报废 / 异常 / 记录').props.onClick();tree=render();assert.ok(nodes(tree,n=>n.type===Business&&n.props.showActions).length);assert.ok(nodes(tree,n=>n.type===Business&&n.props.initialKind==='delivery').length,'delivery draft component remains mounted');
+const pane=nodes(tree,n=>n.type==='section'&&n.props.className==='erp-workflow-pane'&&!n.props.hidden)[0];pane.props.onChangeCapture();button(tree,'关闭办理窗口').props.onClick();assert.equal(closed,0,'unsaved close requires confirmation');
+states=[];refs=[];memo=[];effectDeps=[];props.initialStep=undefined;serverFlow=flow({quantity:1,production_quantity:1,qualified_quantity:0,delivered_quantity:1});serverBusiness={items:[{id:523,qualified_quantity:'1',delivered_quantity:'1',price_ready:1}]};tree=render();for(const effect of effects)effect();await flush();tree=render();assert.equal(nodes(tree,n=>n.type==='button'&&n.props['aria-current']==='step').map(text)[0],'报废 / 异常 / 记录','first entry jumps to appropriate step');assert.ok(text(tree).includes('可查看交货记录'));
+console.log('PASS: scoped part workspace, common next-step rules, partial completion, decimal quantities, spare handling, one visible pane, embedded forms retained across tabs, refresh after completion, guided delivery, save busy guard and unsaved-close protection.');
+}
+run().catch(e=>{console.error(e);process.exitCode=1});

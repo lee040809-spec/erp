@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { Plus, Settings, X, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Settings, X, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { PROCESS_COLORS } from './shared';
 const PROCESS_OPTIONS = ['下料', '车削', '铣削', '磨削', '线切割', '电火花', '热处理', '表面处理', '送货'];
 import type { OrderProcess as Process } from '../types';
+import { processDate } from '../utils/processDates';
 interface ProcessCellProps {
     processes: Process[];
     onUpdate: (processes: Process[]) => void;
     hideCostFields?: boolean;
     routeOnly?: boolean;
     inline?: boolean;
+    allowProcessedChanges?: boolean;
+    onManageProcessed?: () => void;
 }
-const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCostFields = false, routeOnly = false, inline = false }) => {
+const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCostFields = false, routeOnly = false, inline = false, allowProcessedChanges = false, onManageProcessed }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [manualInput, setManualInput] = useState('');
+    const [editingIndex, setEditingIndex] = useState<number | null>(null);
     // 检查是否有送货工序
     const hasDelivery = processes.some(p => p.name === '送货');
     const addProcess = (name: string) => {
@@ -56,7 +60,7 @@ const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCost
             <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-zinc-900"/>
-                <h5 className="text-xl font-bold text-zinc-900 uppercase tracking-tight">添加 / 删除工序</h5>
+                <h5 className="text-xl font-bold text-zinc-900 uppercase tracking-tight">修改 / 添加 / 删除工序</h5>
               </div>
               {!inline && <button type="button" aria-label="关闭工序流程管理" onClick={() => setIsOpen(false)} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
                 <X className="w-6 h-6 text-zinc-400"/>
@@ -83,12 +87,13 @@ const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCost
               </div>
             </div>
 
-            <p className="text-xs text-slate-500 leading-5">选择上方常用工序或输入自定义名称可新增；每行右侧可删除尚未开工的工序，已安排计划日期也可删除。已有报工、实际时间或外协关联的工序需保留历史记录。修改后请点击保存。</p>
+            <p className="text-xs text-slate-500 leading-5">选择常用工序或自定义名称可新增；“修改工序”可调整名称、计划与内制/外协安排。{allowProcessedChanges ? "加工中、已完成工序也可删除，保存后归档并保留历史；状态仍由实际报工计算。" : "已有加工记录的工序请通过下方专项入口，或在工艺窗口勾选允许修改 / 删除已加工工序。"}修改后请点击保存。</p>
+            {onManageProcessed && <button type="button" className="erp-btn text-blue-600" onClick={()=>{setIsOpen(false);onManageProcessed();}}>修改 / 删除已加工工序</button>}
             <div className="space-y-2 pr-1">
               {processes.map((p, idx) => (<div key={p.id || `new-${idx}`} className="flex flex-wrap items-center gap-2 bg-zinc-50 p-3 rounded-lg border border-zinc-100">
                   <span className="text-xs text-slate-400">{idx + 1}</span><input aria-label={`工序${idx + 1}名称`} value={p.name} maxLength={100} onChange={e => onUpdate(processes.map((step,n) => n === idx ? {...step,name:e.target.value} : step))} className="erp-input w-36 font-semibold"/>
                   <label className="flex items-center gap-2 cursor-pointer bg-white px-2 py-1 rounded border border-zinc-200">
-                    <input type="checkbox" checked={p.is_outsourced} disabled={!!p.actual_start_at || !!p.actual_end_at || p.status !== "pending"} onChange={e => {
+                    <input type="checkbox" checked={p.is_outsourced} disabled={!allowProcessedChanges && (!!p.actual_start_at || !!p.actual_end_at || p.status !== "pending")} onChange={e => {
                     const newProcesses = [...processes];
                     newProcesses[idx] = { ...newProcesses[idx], is_outsourced: e.target.checked };
                     onUpdate(newProcesses);
@@ -115,11 +120,14 @@ const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCost
                   </select>
                   <button type="button" className="erp-btn py-1 min-h-8" aria-label={`上移工序${idx + 1}`} disabled={idx === 0} onClick={() => move(idx,-1)}><ArrowUp size={14}/></button>
                   <button type="button" className="erp-btn py-1 min-h-8" aria-label={`下移工序${idx + 1}`} disabled={idx === processes.length - 1} onClick={() => move(idx,1)}><ArrowDown size={14}/></button>
-                  <button type="button" aria-label={`删除工序${idx + 1}`} title={p.actual_start_at || p.actual_end_at || p.status !== "pending" ? "已有实际生产记录，不能直接删除；可调整名称和计划" : "删除此工序及其计划安排，保存后生效；外协关联由系统校验"} disabled={!!p.actual_start_at || !!p.actual_end_at || p.status !== "pending"} onClick={() => {
+                  <button type="button" aria-label={`修改工序${idx + 1}`} className="erp-btn text-blue-600 py-1 min-h-8" onClick={()=>setEditingIndex(editingIndex===idx?null:idx)}>修改工序</button>
+                  <button type="button" aria-label={`删除工序${idx + 1}`} title={allowProcessedChanges ? "从当前工艺移除并保留历史记录，保存后生效" : p.actual_start_at || p.actual_end_at || p.status !== "pending" ? "请先勾选允许修改 / 删除已加工工序" : "删除此工序及其计划安排，保存后生效"} disabled={!allowProcessedChanges && (!!p.actual_start_at || !!p.actual_end_at || p.status !== "pending")} onClick={() => {
+                    setEditingIndex(null);
                     onUpdate(processes.filter((_,n) => n !== idx));
                 }} className="erp-btn text-rose-600 border-rose-200 py-1 min-h-8 disabled:opacity-50">
                     <Trash2 size={14}/>删除工序
                   </button>
+                  {editingIndex===idx && <div className="w-full grid grid-cols-2 gap-3 border-t pt-3"><p className="col-span-2 text-xs text-slate-500">名称和是否外协在本行修改；实际开工 / 完工时间请在工序时间窗口中更正，已有报工数量不会被清空。</p>{(['planned_start_at','planned_end_at'] as const).map((field,n)=><label key={field} className="erp-label">{n===0?'计划开始日期':'计划结束日期'}<input type="date" aria-label={'工序'+(idx+1)+(n===0?'计划开始日期':'计划结束日期')} className="erp-input" value={processDate(p[field])} onChange={e=>onUpdate(processes.map((step,i)=>i===idx?{...step,[field]:e.target.value}:step))}/></label>)}</div>}
                 </div>))}
               {processes.length === 0 && (<div className="text-center py-12 text-sm text-zinc-400 italic bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
                   暂无工序，请从上方选择并添加

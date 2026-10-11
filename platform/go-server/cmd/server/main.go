@@ -239,6 +239,7 @@ func main() {
 		api.GET("/production/items/:itemId/timeline", processTimelineHandler.List)
 		api.PATCH("/production/items/:itemId/route", processTimelineHandler.SaveRoute)
 		api.PATCH("/production/items/:itemId/processes/:processId/timeline", processTimelineHandler.Save)
+		api.GET("/production/items/:itemId/plan", productionWorkbenchHandler.Plan)
 		api.PATCH("/production/plans", productionWorkbenchHandler.Save)
 		api.PATCH("/production/items/:itemId/quantities", productionWorkbenchHandler.SaveQuantities)
 		api.GET("/production/items/:itemId/drawing", productionWorkbenchHandler.Detail)

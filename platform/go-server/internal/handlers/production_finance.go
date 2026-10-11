@@ -90,7 +90,7 @@ func (h *ProductionFinanceHandler) ListCompletions(c *gin.Context) {
 }
 
 func (h *ProductionFinanceHandler) CreateCompletion(c *gin.Context) {
-	if !requireModuleAccess(h.db, c, "production_orders", "production_dashboard") {
+	if !requireProductionConfirmation(h.db, c) {
 		return
 	}
 	// Resolve permissions before taking transaction locks, including idempotent replays.
@@ -198,7 +198,7 @@ FROM order_items WHERE id = ? AND corp_id = ? FOR UPDATE`, itemID, corpID).Scan(
 		}
 	}
 	if !item.UnitPrice.Valid || strings.TrimSpace(item.UnitPrice.String) == "" || !positiveDecimal(item.UnitPrice.String) || item.Currency != "CNY" {
-		response.BadRequest(c, response.CodeInvalidRequest, "订单单价缺失，不能确认产值")
+		response.BadRequest(c, response.CodeInvalidRequest, "零件单价尚未录入或无效，请先在编辑订单中填写大于0的人民币单价，再确认合格完工")
 		return
 	}
 	if e := productionflow.CompletionReady(tx, corpID, itemID, req.QualifiedQuantity, req.DeliveryBatchID, req.BusinessDate); e != nil {
@@ -211,7 +211,7 @@ FROM order_items WHERE id = ? AND corp_id = ? FOR UPDATE`, itemID, corpID).Scan(
 		return
 	}
 	var unfinishedProcesses int64
-	if err := tx.Table("order_processes").Where("corp_id = ? AND order_item_id = ? AND name <> ? AND status <> 'completed'", corpID, itemID, "送货").Count(&unfinishedProcesses).Error; err != nil {
+	if err := tx.Table("order_processes").Where("corp_id = ? AND order_item_id = ? AND deleted_at IS NULL AND name <> ? AND status <> 'completed'", corpID, itemID, "送货").Count(&unfinishedProcesses).Error; err != nil {
 		response.InternalError(c, response.CodeInternal, "检查工序状态失败")
 		return
 	}

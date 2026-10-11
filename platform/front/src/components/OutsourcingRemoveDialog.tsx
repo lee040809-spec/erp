@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import { useState } from 'react';
 export default function OutsourcingRemoveDialog({title,description,onConfirm,onClose}:{title:string;description:string;onConfirm:(reason:string)=>Promise<boolean>;onClose:()=>void}) {
  const [reason,setReason]=useState(''),[busy,setBusy]=useState(false);
  return <section role="alertdialog" aria-label={title} className="erp-card border-rose-200 bg-rose-50/40 p-3 space-y-3">

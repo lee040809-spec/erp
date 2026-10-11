@@ -3,6 +3,7 @@ package workflowmigration
 type Column struct{ Table, Name, Definition string }
 
 var Columns = []Column{
+	{"order_processes", "deleted_at", "DATETIME(3) NULL"},
 	{"production_completions", "delivery_batch_id", "BIGINT NULL"},
 	{"order_business_records", "delivery_batch_id", "BIGINT NULL"},
 	{"cost_entries", "delivery_batch_id", "BIGINT NULL"},

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -94,18 +95,20 @@ const (
 )
 
 type OrderProcess struct {
-	ID             int64         `gorm:"primaryKey;autoIncrement" json:"id"`
-	OrderItemID    int64         `gorm:"column:order_item_id;index" json:"order_item_id"`
-	CorpID         int64         `gorm:"column:corp_id;default:0" json:"corp_id"`
-	Name           string        `gorm:"column:name" json:"name"`
-	IsOutsourced   bool          `gorm:"column:is_outsourced;default:false" json:"is_outsourced"`
-	OutsourcingFee float64       `gorm:"column:outsourcing_fee;default:0" json:"outsourcing_fee"`
-	Status         ProcessStatus `gorm:"column:status;type:varchar(20);default:pending" json:"status"`
-	SortOrder      int           `gorm:"column:sort_order;default:0" json:"sort_order"`
-	PlannedStartAt *time.Time    `gorm:"column:planned_start_at" json:"planned_start_at"`
-	PlannedEndAt   *time.Time    `gorm:"column:planned_end_at" json:"planned_end_at"`
-	ActualStartAt  *time.Time    `gorm:"column:actual_start_at" json:"actual_start_at"`
-	ActualEndAt    *time.Time    `gorm:"column:actual_end_at" json:"actual_end_at"`
+	RetiredBeforeID *int64         `gorm:"-" json:"-"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at" json:"deleted_at"`
+	ID              int64          `gorm:"primaryKey;autoIncrement" json:"id"`
+	OrderItemID     int64          `gorm:"column:order_item_id;index" json:"order_item_id"`
+	CorpID          int64          `gorm:"column:corp_id;default:0" json:"corp_id"`
+	Name            string         `gorm:"column:name" json:"name"`
+	IsOutsourced    bool           `gorm:"column:is_outsourced;default:false" json:"is_outsourced"`
+	OutsourcingFee  float64        `gorm:"column:outsourcing_fee;default:0" json:"outsourcing_fee"`
+	Status          ProcessStatus  `gorm:"column:status;type:varchar(20);default:pending" json:"status"`
+	SortOrder       int            `gorm:"column:sort_order;default:0" json:"sort_order"`
+	PlannedStartAt  *time.Time     `gorm:"column:planned_start_at" json:"planned_start_at"`
+	PlannedEndAt    *time.Time     `gorm:"column:planned_end_at" json:"planned_end_at"`
+	ActualStartAt   *time.Time     `gorm:"column:actual_start_at" json:"actual_start_at"`
+	ActualEndAt     *time.Time     `gorm:"column:actual_end_at" json:"actual_end_at"`
 }
 
 func (OrderProcess) TableName() string { return "order_processes" }

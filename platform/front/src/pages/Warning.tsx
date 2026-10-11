@@ -22,23 +22,7 @@ interface WarningProps {
   hideCostFields?: boolean;
 }
 
-const Warning: React.FC<WarningProps> = ({
-  orders,
-  orderTotal,
-  warningFilters,
-  setWarningFilters,
-  warningPage,
-  setWarningPage,
-  warningPageSize,
-  setWarningPageSize,
-  editOrder,
-  setShowDrawingModal,
-  handleProcessClick,
-  getOrderMaxDueDate,
-  fetchData,
-  fetchOrdersWithFilters,
-  hideCostFields = false
-}) => {
+const Warning: React.FC<WarningProps> = ({ orders, orderTotal, warningFilters, setWarningFilters, warningPage, setWarningPage, warningPageSize, setWarningPageSize, editOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false }) => {
   const [isSearching, setIsSearching] = React.useState(false);
 
   const applied = React.useRef(warningFilters);

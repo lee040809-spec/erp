@@ -58,6 +58,10 @@ func TestBusinessEventsTemporaryTables(t *testing.T) {
 	actualContext.Set("corpID", actualAccount.CorpID)
 	actualContext.Set("roleType", actualAccount.RoleType)
 	actualFinance := NewProductionFinanceHandler(db)
+	if !canConfirmProduction(db, actualContext) {
+		t.Fatal("existing output-statistics account cannot see qualified quantity entry")
+	}
+	t.Log("actual lilin qualified completion permission verified read-only; no role or permission rows changed")
 	if !actualFinance.canImportHistory(actualContext) {
 		t.Fatal("affected lilin account still cannot import historical completions")
 	}
@@ -77,7 +81,7 @@ func TestBusinessEventsTemporaryTables(t *testing.T) {
 		ddl = regexp.MustCompile("AUTO_INCREMENT=[0-9]+").ReplaceAllString(ddl, "AUTO_INCREMENT=1")
 		exec(ddl)
 	}
-	workflowtest.Tables(t, db, "production_completions", "order_business_records", "cost_entries")
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records", "cost_entries")
 	exec("INSERT INTO orders(id,corp_id,order_number,status,due_date) VALUES(1,0,'EVENT-TEST','processing','2026-07-10'),(2,1,'OTHER','processing','2026-07-10')")
 	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,production_quantity,unit_price,status,supply_mode,currency) VALUES(1,0,1,'BUFFER',100,110,10,'processing','self_purchased','CNY'),(2,1,2,'OTHER',10,10,10,'processing','self_purchased','CNY'),(3,0,1,'HISTORY',10,12,5,'completed','self_purchased','CNY')")
 	exec("INSERT INTO order_processes(id,corp_id,order_item_id,name,status) VALUES(1,0,1,'加工','completed'),(2,0,1,'送货','pending')")
@@ -171,6 +175,65 @@ func TestBusinessEventsTemporaryTables(t *testing.T) {
 		t.Fatal("reversed delivery did not update status and quantity")
 	}
 	call(h.Create, event("delivery", 40, "2026-07-05", "delivery-corrected"), orderParams, "/", 200)
+
+	// Regression: detector rear cover has completed active processes, but no qualified completion.
+	// A retired in-progress process must not block the revised active route.
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,production_quantity,unit_price,status,supply_mode,currency) VALUES(4,0,1,'探测器后盖',1,1,0,'processing','self_purchased','CNY')")
+	exec("INSERT INTO order_processes(id,corp_id,order_item_id,name,status,deleted_at) VALUES(10,0,4,'下料','completed',NULL),(11,0,4,'车削','processing',NOW()),(12,0,4,'铣削','completed',NULL),(13,0,4,'送货','pending',NULL)")
+	findDetector := func() map[string]interface{} {
+		result := call(h.List, nil, orderParams, "/", 200)["data"].(map[string]interface{})
+		for _, value := range result["items"].([]interface{}) {
+			entry := value.(map[string]interface{})
+			if entry["id"] == float64(4) {
+				return entry
+			}
+		}
+		t.Fatal("detector missing from business list")
+		return nil
+	}
+	detector := findDetector()
+	if !sameDecimal(fmt.Sprint(detector["available_delivery"]), "0") || detector["price_ready"] != float64(0) || detector["production_ready"] != float64(1) {
+		t.Fatalf("missing-price/missing-completion guidance wrong: %+v", detector)
+	}
+	detectorEvent := map[string]interface{}{"kind": "delivery", "order_item_id": 4, "quantity": 1, "business_date": "2026-07-03", "request_id": "detector-delivery", "severity": "normal"}
+	call(h.Create, detectorEvent, orderParams, "/", 400)
+	detectorCompletion := map[string]interface{}{"qualified_quantity": 1, "business_date": "2026-07-03", "request_id": "detector-qualified"}
+	detectorParams := gin.Params{{Key: "itemId", Value: "4"}}
+	missingPrice := call(f.CreateCompletion, detectorCompletion, detectorParams, "/", 400)
+	if !strings.Contains(fmt.Sprint(missingPrice), "单价") {
+		t.Fatal("missing price not explained")
+	}
+	var count int64
+	check(db.Table("production_completions").Where("order_item_id=4").Count(&count).Error)
+	if count != 0 {
+		t.Fatal("missing price silently entered as zero output")
+	}
+	exec("UPDATE order_items SET unit_price=80 WHERE id=4")
+	call(f.CreateCompletion, detectorCompletion, detectorParams, "/", 200)
+	call(f.CreateCompletion, detectorCompletion, detectorParams, "/", 200)
+	detector = findDetector()
+	if !sameDecimal(fmt.Sprint(detector["available_delivery"]), "1") || !sameDecimal(fmt.Sprint(detector["qualified_quantity"]), "1") || detector["price_ready"] != float64(1) {
+		t.Fatalf("confirmed quantity did not become deliverable: %+v", detector)
+	}
+	call(h.Create, detectorEvent, orderParams, "/", 200)
+	call(h.Create, detectorEvent, orderParams, "/", 200)
+	detectorEvent["request_id"] = "detector-double-delivery"
+	call(h.Create, detectorEvent, orderParams, "/", 400)
+	check(db.Table("production_completions").Where("order_item_id=4").Count(&count).Error)
+	if count != 1 {
+		t.Fatal("detector completion counted twice")
+	}
+	var detectorOutput string
+	check(db.Table("production_completions").Where("order_item_id=4").Select("output_value").Scan(&detectorOutput).Error)
+	if !sameDecimal(detectorOutput, "80") {
+		t.Fatal("detector output not based on entered unit price")
+	}
+	detector = findDetector()
+	if !sameDecimal(fmt.Sprint(detector["available_delivery"]), "0") || detector["delivered_quantity"] != float64(1) {
+		t.Fatal("detector delivery total wrong")
+	}
+	t.Log("detector regression: price required; active completed route accepts one qualified piece; one delivery succeeds; duplicate and over-delivery stay blocked")
+
 	corp = 1
 	call(h.List, nil, orderParams, "/", 404)
 	call(h.Print, nil, gin.Params{{Key: "recordId", Value: strconvID(delivery1["id"])}}, "/", 404)
@@ -194,6 +257,9 @@ func TestBusinessEventsTemporaryTables(t *testing.T) {
 	}
 	// Finance write permission is kept separate from field requirements.
 	call(f.ImportHistory, history, nil, "/", 403)
+	if canConfirmProduction(db, contextForPolicy()) {
+		t.Fatal("order-view permission alone grants completion")
+	}
 
 	// monthly_output grants historical production entry, without cost administration.
 	exec("INSERT INTO resources(id,resource_type,resource_key,name) VALUES(101,'menu','monthly_output','产值统计'),(102,'menu','finance','财务报表')")
@@ -202,6 +268,23 @@ func TestBusinessEventsTemporaryTables(t *testing.T) {
 	if access["can_import_history"] != true || access["can_manage_costs"] != false {
 		t.Fatal("history permission coupled to cost administration")
 	}
+
+	// A reporting user can enter normal qualified production, not just import history.
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,production_quantity,unit_price,status,supply_mode,currency) VALUES(5,0,1,'REPORTING-ENTRY',1,1,80,'processing','self_purchased','CNY')")
+	exec("INSERT INTO order_processes(id,corp_id,order_item_id,name,status) VALUES(15,0,5,'加工','completed')")
+	reported := map[string]interface{}{"qualified_quantity": 1, "business_date": "2026-07-03", "request_id": "reporting-entry"}
+	reportedParams := gin.Params{{Key: "itemId", Value: "5"}}
+	businessAccess := call(h.List, nil, orderParams, "/", 200)["data"].(map[string]interface{})
+	if businessAccess["can_complete"] != true {
+		t.Fatal("quantity entry hidden from reporting user")
+	}
+	flowAccess := call(NewProductionFlowHandler(db).Read, nil, gin.Params{{Key: "itemId", Value: "5"}}, "/", 200)["data"].(map[string]interface{})
+	if flowAccess["can_complete"] != true {
+		t.Fatal("batch entry and normal completion permissions differ")
+	}
+	call(f.CreateCompletion, reported, reportedParams, "/", 200)
+	call(f.CreateCompletion, reported, reportedParams, "/", 200)
+
 	call(f.ImportHistory, history, nil, "/", 200)
 	call(f.ImportHistory, history, nil, "/", 200)
 	call(f.CreateCostEntry, map[string]interface{}{"cost_type": "material", "amount": "1.00", "business_date": "2026-04-01"}, nil, "/", 403)
@@ -209,12 +292,17 @@ func TestBusinessEventsTemporaryTables(t *testing.T) {
 	call(f.CloseMonth, map[string]interface{}{"reviewed_cost_complete": true}, gin.Params{{Key: "month", Value: "2026-04"}}, "/", 403)
 	// Revocation is checked before idempotent replay; finance read access is not import access.
 	exec("DELETE FROM permissions WHERE resource_id=101")
+	call(f.CreateCompletion, reported, reportedParams, "/", 403)
 	call(f.ImportHistory, history, nil, "/", 403)
 	exec("INSERT INTO permissions(corp_id,role_id,resource_id) VALUES(0,1,102)")
 	access = call(f.GetFinanceAccess, nil, nil, "/", 200)["data"].(map[string]interface{})
 	if access["can_import_history"] != false || access["can_manage_costs"] != false {
 		t.Fatal("read-only finance user can write")
 	}
+	if canConfirmProduction(db, contextForPolicy()) {
+		t.Fatal("finance read-only permission grants completion")
+	}
+	call(f.CreateCompletion, reported, reportedParams, "/", 403)
 	call(f.PreviewHistory, nil, nil, "/?year=2026", 200)
 	call(f.ImportHistory, history, nil, "/", 403)
 	t.Log("output-statistics user imports optional-evidence history successfully; duplicates, revocation, finance read-only access, costs, allocations and closing remain protected")

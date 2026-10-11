@@ -7,8 +7,9 @@ import (
 )
 
 // GuardRoute checks each affected process rather than locking the whole part.
-func GuardRoute(tx *gorm.DB, corp, item int64, incoming []models.OrderProcess) error {
-	return guardRouteChange(tx, corp, item, incoming)
+func GuardRoute(tx *gorm.DB, corp, item int64, incoming []models.OrderProcess, allow ...bool) error {
+	archive := len(allow) > 0 && allow[0]
+	return guardRouteChange(tx, corp, item, incoming, archive)
 }
 func GuardQuantities(tx *gorm.DB, corp, item int64, ordered, production int) error {
 	var processIDs []int64

@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, SlidersHorizontal, UserRound } from 'lucide-react';
+
+import { ArrowUpRight, CalendarDays, CheckCircle2, SlidersHorizontal, UserRound } from 'lucide-react';
 import { StatusBadge } from './shared';
 import { processDate } from '../utils/processDates';
 import type { ProductionTask } from '../types/productionWorkbench';
@@ -12,18 +12,11 @@ interface Props {
   selected: boolean;
   today: string;
   onSelect: (checked: boolean) => void;
-  onArrange: () => void;
-  onScrap: () => void;
   onOpenOrder: () => void;
-  onTimeline: () => void;
-  onEditRoute?: () => void;
   onDetails: () => void;
   onQuantities: () => void;
   onUnblock: () => void;
   onDrawing: () => void;
-  onProcess: (process: ProductionTask['processes'][number]) => void;
-  onComplete: () => void;
- onFlow: () => void;
 }
 
 // Presentation only: requests, permissions and business writes belong to the workbench page.
@@ -31,7 +24,6 @@ export default function WorkbenchTaskCard(p: Props) {
   const { task, canManage, saving, density } = p;
   const steps = task.processes.filter(step => step.name !== '送货');
   const done = steps.filter(step => step.status === 'completed').length;
-  const next = steps.find(step => step.status !== 'completed');
   const overdue = !!task.due_date && task.due_date < p.today;
   const orderDate = processDate(task.start_date);
   const border = task.blocked_reason ? 'border-l-amber-400' : overdue ? 'border-l-rose-400' : 'border-l-transparent';
@@ -54,14 +46,9 @@ export default function WorkbenchTaskCard(p: Props) {
           </div>
         </div>
       </div>
-      <div className="flex gap-2">
-        {canManage && <button onClick={p.onArrange} disabled={saving} className="erp-btn text-blue-600 py-1 min-h-8">安排生产</button>}
-        {!task.flow?.tracking && canManage && <button onClick={p.onScrap} className="erp-btn text-rose-600">登记报废</button>}
-        <button onClick={p.onOpenOrder} aria-label={`查看订单${task.order_number}的${task.part_name}`} className="erp-btn text-blue-600 py-1 min-h-8">查看订单<ArrowUpRight size={14}/></button>
-        <button onClick={p.onFlow} className="erp-btn text-blue-600 py-1 min-h-8">分批生产</button>
- <button onClick={p.onTimeline} className="erp-btn py-1 min-h-8">工序时间</button>
-        {canManage && p.onEditRoute && <button onClick={p.onEditRoute} disabled={saving} className="erp-btn text-blue-600 py-1 min-h-8">增删工序</button>}
-        <button onClick={p.onDetails} className="erp-btn py-1 min-h-8">详情<ArrowUpRight size={14}/></button>
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={p.onDetails} disabled={saving} className="erp-btn erp-primary py-1 min-h-8">办理零件</button>
+        <button onClick={p.onOpenOrder} aria-label={`查看订单${task.order_number}的${task.part_name}`} className="erp-btn py-1 min-h-8">订单资料<ArrowUpRight size={14}/></button>
       </div>
     </div>
     <div className={density === 'compact' ? 'erp-part-metrics my-2 text-xs' : 'grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-6 gap-3 my-4 text-xs'}>
@@ -81,8 +68,6 @@ export default function WorkbenchTaskCard(p: Props) {
       </div>
       <div className="flex items-center justify-between flex-wrap gap-3"><div className="flex gap-2 flex-wrap">
         {task.has_drawing && <button onClick={p.onDrawing} className="erp-btn text-slate-500 py-1 min-h-8">图纸</button>}
-        {!task.flow?.tracking && canManage && next && <button disabled={saving} onClick={() => p.onProcess(next)} className="erp-btn erp-primary py-1 min-h-8">{next.status === 'pending' ? '开始' : '完成'}{next.name}<ArrowRight size={14}/></button>}
-        {!task.flow?.tracking && canManage && !next && task.remaining_quantity > 0 && <button disabled={saving} onClick={p.onComplete} className="erp-btn erp-success py-1 min-h-8"><CheckCircle2 size={14}/>确认合格完工</button>}
       </div></div>
     </div>
     {task.notes && <p className="mt-2 text-xs text-slate-400 whitespace-pre-wrap">{task.notes}</p>}

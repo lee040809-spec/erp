@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Settings, Menu, X, ChevronLeft, ChevronRight, ChevronUp, Lock, KeyRound, Mail, LogOut, Factory } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Menu, X, ChevronLeft, ChevronRight, ChevronUp, Lock, KeyRound, Mail, LogOut, Factory } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 interface NavItem {
     id: string;

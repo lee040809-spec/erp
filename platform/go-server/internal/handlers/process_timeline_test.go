@@ -86,7 +86,7 @@ func TestProcessTimelineTemporaryTables(t *testing.T) {
 		ddl = regexp.MustCompile(",\\s*\\)").ReplaceAllString(strings.Join(lines, "\n"), "\n)")
 		exec(strings.Replace(ddl, "CREATE TABLE", "CREATE TEMPORARY TABLE", 1))
 	}
-	workflowtest.Tables(t, db, "production_completions", "order_business_records")
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records")
 	exec("CREATE TEMPORARY TABLE users(id BIGINT,corp_id BIGINT,role_id BIGINT)")
 	exec("CREATE TEMPORARY TABLE permissions(role_id BIGINT,corp_id BIGINT,resource_id BIGINT)")
 	exec("CREATE TEMPORARY TABLE resources(id BIGINT,resource_key VARCHAR(100))")
@@ -291,4 +291,20 @@ func TestProcessTimelineTemporaryTables(t *testing.T) {
 	if n != 2 {
 		t.Fatal("order plan changes not audited")
 	}
+	// An explicitly approved legacy retirement keeps actual dates, fee snapshots and order-delete protection.
+	call(h.SaveRoute, `{"allow_processed_changes":true,"reason":"取消历史铣削，保留原加工记录","processes":[{"id":3,"name":"送货"},{"id":4,"name":"历史加工"}]}`, "1", "", "admin", 200)
+	retired := models.OrderProcess{}
+	check(db.Unscoped().First(&retired, 1).Error)
+	if !retired.DeletedAt.Valid || retired.ActualStartAt == nil || retired.ActualEndAt == nil || retired.OutsourcingFee != 100 || retired.Status != "completed" {
+		t.Fatal("legacy retirement erased actual dates, fee or status")
+	}
+	foreign := models.OrderProcess{}
+	check(db.First(&foreign, 2).Error)
+	if foreign.Name != "FOREIGN" || foreign.DeletedAt.Valid {
+		t.Fatal("foreign company route changed")
+	}
+	if !errors.Is(repo.Delete(1, 0), repository.ErrTimedProcess) {
+		t.Fatal("archived actual production allowed whole-order deletion")
+	}
+
 }

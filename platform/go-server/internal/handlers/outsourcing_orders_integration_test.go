@@ -65,7 +65,7 @@ func TestOutsourcingOrdersIntegrationTemporaryTables(t *testing.T) {
 		ddl = regexp.MustCompile("AUTO_INCREMENT=[0-9]+").ReplaceAllString(ddl, "AUTO_INCREMENT=1")
 		check(db.Exec(ddl).Error)
 	}
-	workflowtest.Tables(t, db, "production_completions", "order_business_records", "cost_entries")
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records", "cost_entries")
 	today := productionflow.Today()
 	date, _ := time.Parse("2006-01-02", today)
 	start := date.AddDate(0, 0, -2)

@@ -211,3 +211,30 @@ func (h *ProductionWorkbenchHandler) SaveQuantities(c *gin.Context) {
 	}
 	response.SuccessWithMessage(c, "投产与报废数量已保存", nil)
 }
+
+// Plan reads a part's arrangement; writes retain the workbench permissions.
+func (h *ProductionWorkbenchHandler) Plan(c *gin.Context) {
+	if !flowRead(h.db, c) {
+		return
+	}
+	id := flowID(c, "itemId")
+	var count int64
+	if id <= 0 || h.db.Table("order_items").Where("id=? AND corp_id=?", id, middleware.GetCorpID(c)).Count(&count).Error != nil || count != 1 {
+		c.JSON(404, gin.H{"code": response.CodeNotFound, "message": "零件不存在"})
+		return
+	}
+	var plan struct {
+		Assignee       string  `json:"assignee"`
+		Equipment      string  `json:"equipment"`
+		PlannedStart   *string `json:"planned_start"`
+		PlannedEnd     *string `json:"planned_end"`
+		EstimatedHours string  `json:"estimated_hours"`
+		BlockedReason  string  `json:"blocked_reason"`
+		Notes          string  `json:"notes"`
+	}
+	if err := h.db.Table("production_plans").Where("order_item_id=? AND corp_id=?", id, middleware.GetCorpID(c)).Select("assignee,equipment,planned_start,planned_end,CAST(estimated_hours AS CHAR) AS estimated_hours,blocked_reason,notes").Limit(1).Scan(&plan).Error; err != nil {
+		response.InternalError(c, response.CodeInternal, "读取生产安排失败")
+		return
+	}
+	response.Success(c, gin.H{"plan": plan, "can_manage": h.canManage(c)})
+}

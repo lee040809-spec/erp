@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { parseProgressRule, progressRuleMatches } from '../utils/progressRule';
 import { businessToday } from '../utils/businessDate';
@@ -101,7 +101,17 @@ const RuleModal: React.FC<RuleModalProps> = ({
 
   if (!show) return null;
 
-  return (
+  const renderOperator = (btn) => (
+                      <button
+                        key={btn}
+                        type="button"
+                        onClick={() => setRuleForm({ ...ruleForm, formula: ruleForm.formula + btn })}
+                        className="flex items-center justify-center rounded-xl font-bold bg-zinc-900 text-white border border-zinc-900 hover:bg-zinc-800 transition-all shadow-sm text-sm h-full min-h-[40px]"
+                      >
+                        {btn}
+                      </button>
+                    );
+    return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0 }}
@@ -351,16 +361,7 @@ const RuleModal: React.FC<RuleModalProps> = ({
                 <div className="space-y-2 flex flex-col h-full">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">基础运算符号</span>
                   <div className="grid grid-cols-3 gap-2 flex-1">
-                    {['+', '-', '*', '/', '(', ')'].map((btn) => (
-                      <button
-                        key={btn}
-                        type="button"
-                        onClick={() => setRuleForm({ ...ruleForm, formula: ruleForm.formula + btn })}
-                        className="flex items-center justify-center rounded-xl font-bold bg-zinc-900 text-white border border-zinc-900 hover:bg-zinc-800 transition-all shadow-sm text-sm h-full min-h-[40px]"
-                      >
-                        {btn}
-                      </button>
-                    ))}
+                    {['+', '-', '*', '/', '(', ')'].map(renderOperator)}
                   </div>
                 </div>
 
@@ -368,16 +369,7 @@ const RuleModal: React.FC<RuleModalProps> = ({
                 <div className="space-y-2 flex flex-col h-full">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">数学逻辑判断</span>
                   <div className="grid grid-cols-3 gap-2 flex-1">
-                    {['<', '<=', '>', '>=', '=', '!='].map((btn) => (
-                      <button
-                        key={btn}
-                        type="button"
-                        onClick={() => setRuleForm({ ...ruleForm, formula: ruleForm.formula + btn })}
-                        className="flex items-center justify-center rounded-xl font-bold bg-zinc-900 text-white border border-zinc-900 hover:bg-zinc-800 transition-all shadow-sm text-sm h-full min-h-[40px]"
-                      >
-                        {btn}
-                      </button>
-                    ))}
+                    {['<', '<=', '>', '>=', '=', '!='].map(renderOperator)}
                   </div>
                 </div>
               </div>

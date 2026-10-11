@@ -36,7 +36,7 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		"today":      " AND COALESCE(pp.planned_end,bd.next_due,i.due_date)=?",
 		"overdue":    " AND COALESCE(bd.next_due,i.due_date)<?",
 		"blocked":    " AND COALESCE(pp.blocked_reason,'')<>''",
-		"outsourced": " AND (EXISTS(SELECT 1 FROM outsourcing_dispatches od WHERE od.corp_id=i.corp_id AND od.order_item_id=i.id AND od.open_quantity+od.rework_waiting_quantity+od.rework_out_quantity>0) OR (NOT EXISTS(SELECT 1 FROM process_quantity_totals pt WHERE pt.corp_id=i.corp_id AND pt.order_item_id=i.id) AND EXISTS(SELECT 1 FROM order_processes op WHERE op.corp_id=i.corp_id AND op.order_item_id=i.id AND op.is_outsourced=1 AND op.name<>'送货' AND op.status<>'completed')))",
+		"outsourced": " AND (EXISTS(SELECT 1 FROM outsourcing_dispatches od WHERE od.corp_id=i.corp_id AND od.order_item_id=i.id AND od.open_quantity+od.rework_waiting_quantity+od.rework_out_quantity>0) OR (NOT EXISTS(SELECT 1 FROM process_quantity_totals pt WHERE pt.corp_id=i.corp_id AND pt.order_item_id=i.id) AND EXISTS(SELECT 1 FROM order_processes op WHERE op.corp_id=i.corp_id AND op.order_item_id=i.id AND op.deleted_at IS NULL AND op.is_outsourced=1 AND op.name<>'送货' AND op.status<>'completed')))",
 	}
 	metricSQL := []string{}
 	metricArgs := []interface{}{}
@@ -54,7 +54,7 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 			metricArgs = append(metricArgs, today, today, today)
 		}
 	}
-	metricBase := strings.Replace(base, " WHERE i.corp_id", " LEFT JOIN (SELECT corp_id,order_item_id,1 AS flag FROM (SELECT corp_id,order_item_id FROM outsourcing_dispatches WHERE open_quantity+rework_waiting_quantity+rework_out_quantity>0 UNION SELECT op.corp_id,op.order_item_id FROM order_processes op LEFT JOIN process_quantity_totals pt ON pt.corp_id=op.corp_id AND pt.order_item_id=op.order_item_id WHERE op.is_outsourced=1 AND op.name<>'送货' AND op.status<>'completed' AND pt.id IS NULL) outs GROUP BY corp_id,order_item_id) wb_out ON wb_out.corp_id=i.corp_id AND wb_out.order_item_id=i.id WHERE i.corp_id", 1)
+	metricBase := strings.Replace(base, " WHERE i.corp_id", " LEFT JOIN (SELECT corp_id,order_item_id,1 AS flag FROM (SELECT corp_id,order_item_id FROM outsourcing_dispatches WHERE open_quantity+rework_waiting_quantity+rework_out_quantity>0 UNION SELECT op.corp_id,op.order_item_id FROM order_processes op LEFT JOIN process_quantity_totals pt ON pt.corp_id=op.corp_id AND pt.order_item_id=op.order_item_id WHERE op.deleted_at IS NULL AND op.is_outsourced=1 AND op.name<>'送货' AND op.status<>'completed' AND pt.id IS NULL) outs GROUP BY corp_id,order_item_id) wb_out ON wb_out.corp_id=i.corp_id AND wb_out.order_item_id=i.id WHERE i.corp_id", 1)
 	metricArgs = append(metricArgs, corp)
 	metricResult, metricErr := h.db.Raw("SELECT "+strings.Join(metricSQL, ",")+metricBase, metricArgs...).Rows()
 	if metricErr != nil {

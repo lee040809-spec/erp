@@ -1,12 +1,14 @@
-import React, { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Baseline, FlowData } from '../types/productionFlow';
 import { flowDate, flowRequest, flowToday, withRequestID } from '../services/productionFlow';
 
-export default function ProcessQuantityPanel({ data, onChanged, onOutsourcing }: { data: FlowData; onChanged: () => Promise<void>; onOutsourcing: () => void }) {
+export default function ProcessQuantityPanel({ data, onChanged, onOutsourcing, initialProcess, onBusyChange }: { data: FlowData; onChanged: () => Promise<void>; onOutsourcing: () => void; initialProcess?:number; onBusyChange?:(busy:boolean)=>void }) {
   const { flow, can_manage } = data;
   const [baseline, setBaseline] = useState<Baseline[]>(flow.processes.map(p => ({ process_id: p.id, started_quantity: 0, completed_quantity: 0, scrap_quantity: 0 })));
   const [process, setProcess] = useState(String(flow.processes.find(p => !p.is_outsourced)?.id || ''));
   const [kind, setKind] = useState('start'), [quantity, setQuantity] = useState(''), [date, setDate] = useState(flowToday()), [notes, setNotes] = useState(''), [error, setError] = useState(''), [saving, setSaving] = useState(false);
+  useEffect(()=>{onBusyChange?.(saving);return()=>onBusyChange?.(false)},[saving,onBusyChange]);
+  useEffect(()=>{setBaseline(old=>flow.processes.map(p=>old.find(b=>b.process_id===p.id)||{process_id:p.id,started_quantity:0,completed_quantity:0,scrap_quantity:0}));setProcess(old=>String(flow.processes.find(p=>p.id===initialProcess&&!p.is_outsourced)?.id||flow.processes.find(p=>String(p.id)===old&&!p.is_outsourced)?.id||flow.processes.find(p=>!p.is_outsourced)?.id||''));},[flow.processes,initialProcess]);
   const pending = useRef({ signature: '', id: '' }), busy = useRef(false);
   const act = async (action: () => Promise<unknown>) => { if (busy.current) return; busy.current = true; setSaving(true); setError(''); try { await action(); await onChanged(); setQuantity(''); } catch (e) { setError((e as Error).message); } finally { busy.current = false; setSaving(false); } };
   const selected = flow.processes.find(p => p.id === Number(process));
@@ -24,6 +26,6 @@ export default function ProcessQuantityPanel({ data, onChanged, onOutsourcing }:
       <label className="erp-label">备注（选填）<input className="erp-input" maxLength={500} value={notes} onChange={e => setNotes(e.target.value)}/></label><div className="flex gap-2"><button className="erp-btn erp-primary" disabled={saving || !selected || !max}>登记工序数量</button><button className="erp-btn" type="button" onClick={onOutsourcing}>外协发出 / 回厂</button></div>
     </form>}
     {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
-    <details className="text-xs text-slate-500"><summary className="cursor-pointer">最近工序报工记录（最多50条）</summary><div className="mt-2 space-y-1">{flow.events.map(e => <p key={e.id}>{flowDate(e.business_date) || '历史基线（日期未知）'} · {flow.processes.find(p => p.id === e.order_process_id)?.name} · {{ start: '开工', complete: '完工', scrap: '报废' }[e.kind] || e.kind} {e.quantity} 件 · {e.source_type === 'outsourcing_reversal' ? '撤销外协发出的数量冲回' : e.source_type === 'outsourcing' ? '外协自动报工' : ''}</p>)}</div></details>
+    <details className="text-xs text-slate-500"><summary className="cursor-pointer">最近工序报工记录（最多50条）</summary><div className="mt-2 space-y-1">{flow.events.map(e => <p key={e.id}>{flowDate(e.business_date) || '历史基线（日期未知）'} · {flow.processes.find(p => p.id === e.order_process_id)?.name || flow.historical_process_names?.[String(e.order_process_id)] || ('已移除工序 #'+e.order_process_id)} · {{ start: '开工', complete: '完工', scrap: '报废' }[e.kind] || e.kind} {e.quantity} 件 · {e.source_type === 'outsourcing_reversal' ? '撤销外协发出的数量冲回' : e.source_type === 'outsourcing' ? '外协自动报工' : ''}</p>)}</div></details>
   </div>;
 }

@@ -22,23 +22,7 @@ interface ImminentProps {
   hideCostFields?: boolean;
 }
 
-const Imminent: React.FC<ImminentProps> = ({
-  orders,
-  orderTotal,
-  imminentFilters,
-  setImminentFilters,
-  imminentPage,
-  setImminentPage,
-  imminentPageSize,
-  setImminentPageSize,
-  editOrder,
-  setShowDrawingModal,
-  handleProcessClick,
-  getOrderMaxDueDate,
-  fetchData,
-  fetchOrdersWithFilters,
-  hideCostFields = false
-}) => {
+const Imminent: React.FC<ImminentProps> = ({ orders, orderTotal, imminentFilters, setImminentFilters, imminentPage, setImminentPage, imminentPageSize, setImminentPageSize, editOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false }) => {
   const [isSearching, setIsSearching] = React.useState(false);
 
   const applied = React.useRef(imminentFilters);

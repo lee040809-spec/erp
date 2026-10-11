@@ -12,15 +12,17 @@ var ErrTimedProcess = errors.New("工序已有实际时间记录，不能直接�
 
 func processNodes(p models.OrderProcess) string {
 	b, _ := json.Marshal(struct {
-		Name         string               `json:"name"`
-		SortOrder    int                  `json:"sort_order"`
-		Outsourced   bool                 `json:"is_outsourced"`
-		Status       models.ProcessStatus `json:"status"`
-		PlannedStart *time.Time           `json:"planned_start_at"`
-		PlannedEnd   *time.Time           `json:"planned_end_at"`
-		ActualStart  *time.Time           `json:"actual_start_at"`
-		ActualEnd    *time.Time           `json:"actual_end_at"`
-	}{p.Name, p.SortOrder, p.IsOutsourced, p.Status, p.PlannedStartAt, p.PlannedEndAt, p.ActualStartAt, p.ActualEndAt})
+		RetiredBeforeID *int64               `json:"retired_before_id"`
+		DeletedAt       gorm.DeletedAt       `json:"deleted_at"`
+		Name            string               `json:"name"`
+		SortOrder       int                  `json:"sort_order"`
+		Outsourced      bool                 `json:"is_outsourced"`
+		Status          models.ProcessStatus `json:"status"`
+		PlannedStart    *time.Time           `json:"planned_start_at"`
+		PlannedEnd      *time.Time           `json:"planned_end_at"`
+		ActualStart     *time.Time           `json:"actual_start_at"`
+		ActualEnd       *time.Time           `json:"actual_end_at"`
+	}{p.RetiredBeforeID, p.DeletedAt, p.Name, p.SortOrder, p.IsOutsourced, p.Status, p.PlannedStartAt, p.PlannedEndAt, p.ActualStartAt, p.ActualEndAt})
 	return string(b)
 }
 

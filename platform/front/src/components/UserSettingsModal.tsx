@@ -10,14 +10,7 @@ interface UserSettingsModalProps {
   userEmail: string;
 }
 
-const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
-  isOpen,
-  type,
-  onClose,
-  onLogout,
-  userId,
-  userEmail: initialUserEmail
-}) => {
+const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, type, onClose, onLogout, userId }) => {
   // 修改密码
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');

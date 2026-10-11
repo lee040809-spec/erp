@@ -25,7 +25,9 @@ func (h *ProcessTimelineHandler) SaveRoute(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Processes []struct {
+		AllowProcessedChanges bool   `json:"allow_processed_changes"`
+		Reason                string `json:"reason"`
+		Processes             []struct {
 			ID           int64   `json:"id"`
 			Name         string  `json:"name"`
 			Outsourced   bool    `json:"is_outsourced"`
@@ -73,7 +75,7 @@ func (h *ProcessTimelineHandler) SaveRoute(c *gin.Context) {
 		plans[p.ID] = v.PlannedStart != nil
 		incoming = append(incoming, p)
 	}
-	err = repository.NewOrderRepository(h.db).UpdateRouteForCorp(middleware.GetCorpID(c), itemID, middleware.GetUserID(c), incoming, plans)
+	err = repository.NewOrderRepository(h.db).UpdateRouteForCorp(middleware.GetCorpID(c), itemID, middleware.GetUserID(c), incoming, plans, repository.RouteChangeOptions{AllowProcessedChanges: req.AllowProcessedChanges, Reason: req.Reason})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		response.ErrorWithCode(c, 404, response.CodeNotFound, "零件或工序不存在")
 		return
@@ -82,5 +84,5 @@ func (h *ProcessTimelineHandler) SaveRoute(c *gin.Context) {
 		response.BadRequest(c, response.CodeInvalidRequest, err.Error())
 		return
 	}
-	response.SuccessWithMessage(c, "加工工艺已保存，原有生产记录保持不变", nil)
+	response.SuccessWithMessage(c, "加工工艺已保存，移除的工序已归档，原有生产和费用记录保持不变", nil)
 }

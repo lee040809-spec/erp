@@ -13,8 +13,13 @@ const dateLabel = (value: number) => new Intl.DateTimeFormat('zh-CN', { timeZone
 const shortNode = (value?: string | null) => processDate(value) || '未排期';
 const statusName = (status: OrderProcess['status']) => status === 'completed' ? '已完成' : status === 'processing' ? '加工中' : '待加工';
 
-export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSelect, onDeliverySelect, onEditRoute }: { rows: ProcessGanttRow[]; parts?: GanttPart[]; onSelect?: (row: ProcessGanttRow) => void; onDeliverySelect?: (part: GanttPart) => void; onEditRoute?: (part: GanttPart) => void }) {
+export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSelect, onDeliverySelect, onEditRoute, stickyAxis = false }: { rows: ProcessGanttRow[]; parts?: GanttPart[]; stickyAxis?: boolean; onSelect?: (row: ProcessGanttRow) => void; onDeliverySelect?: (part: GanttPart) => void; onEditRoute?: (part: GanttPart) => void }) {
   const chartId = useId(), chartRef = useRef<HTMLElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null), axisDatesRef = useRef<HTMLDivElement>(null);
+  // Synchronize only the date viewport; horizontal scrolling must not rerender all parts.
+  const syncAxis = () => {
+    if (scrollRef.current && axisDatesRef.current) axisDatesRef.current.scrollLeft = scrollRef.current.scrollLeft;
+  };
   const [days, setDays] = useState(14), [offset, setOffset] = useState<number | null>(null);
   // Undefined is a fixed day range; null fits this page; an item ID fits that part.
   const [overview, setOverview] = useState<number | null | undefined>(undefined), [viewportWidth, setViewportWidth] = useState(760);
@@ -55,6 +60,14 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
   const end = start + visibleDays * DAY, now = dayStart(Date.now());
   const dayWidth = fullView ? Math.max(3, Math.min(64, (viewportWidth - labelWidth - 18) / visibleDays)) : 64;
   const width = visibleDays * dayWidth, tickStep = Math.max(1, Math.ceil(48 / dayWidth));
+  useEffect(() => { syncAxis(); }, [stickyAxis, width, viewportWidth, labelWidth]);
+  const dateTicks = <div className="flex" style={{ width }}>
+    {Array.from({ length: Math.ceil(visibleDays / tickStep) }, (_, i) => <div key={i} style={{ width: Math.min(tickStep, visibleDays - i * tickStep) * dayWidth, flexShrink: 0 }} className="erp-gantt-day-tick">{dateLabel(start + i * tickStep * DAY)}</div>)}
+  </div>;
+  const axis = <div className="erp-gantt-axis">
+    <div className="erp-gantt-label font-semibold">零件 / 工序 · 按天</div>
+    {stickyAxis ? <div ref={axisDatesRef} className="erp-gantt-axis-dates">{dateTicks}</div> : dateTicks}
+  </div>;
   const intersects = (from: number, until: number) => Number.isFinite(from) && Number.isFinite(until) && from < end && until > start;
   const togglePart = (itemId: number) => setCollapsed(previous => {
     const next = new Set(previous);
@@ -131,7 +144,7 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
       </button>
     </div>;
   };
-  return <section ref={chartRef} className="erp-gantt" aria-label="工序甘特图">
+  return <section ref={chartRef} className={`erp-gantt${stickyAxis ? " erp-gantt-page-axis" : ""}`} aria-label="工序甘特图">
     <header className="erp-gantt-toolbar">
       <div className="erp-gantt-legends"><span className="erp-gantt-legend"><i className="bg-blue-400" />计划</span><span className="erp-gantt-legend"><i className="bg-amber-400" />加工中</span><span className="erp-gantt-legend"><i className="bg-emerald-500" />实际</span><span className="erp-gantt-legend"><i className="erp-gantt-due-legend" />交期</span><span className="erp-gantt-legend"><i className="erp-gantt-late-legend" />超期风险</span></div>
       <div className="erp-gantt-controls">
@@ -141,8 +154,9 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
       </div>
       <p className="erp-gantt-range-note">{fullView ? overview == null ? '本页全程' : `${groups.find(g => g.itemId === overview)?.partName || '零件'}全程` : '当前时段'} · {displayNode(new Date(start).toISOString())} — {displayNode(new Date(end - DAY).toISOString())}{fullView ? ' · 可选 7/14 天细看' : ' · 箭头表示工序仍延续至所标日期'}</p>
     </header>
-    <div className="erp-gantt-scroll"><div style={{ minWidth: `calc(${width}px + var(--erp-gantt-label-width))` }}>
-      <div className="erp-gantt-axis"><div className="erp-gantt-label font-semibold">零件 / 工序 · 按天</div><div className="flex" style={{ width }}>{Array.from({ length: Math.ceil(visibleDays / tickStep) }, (_, i) => <div key={i} style={{ width: Math.min(tickStep, visibleDays - i * tickStep) * dayWidth, flexShrink: 0 }} className="erp-gantt-day-tick">{dateLabel(start + i * tickStep * DAY)}</div>)}</div></div>
+    {stickyAxis && axis}
+    <div ref={scrollRef} className="erp-gantt-scroll" onScroll={stickyAxis ? syncAxis : undefined} tabIndex={stickyAxis ? 0 : undefined} aria-label={stickyAxis ? "甘特图工序时间区域" : undefined}><div style={{ minWidth: `calc(${width}px + var(--erp-gantt-label-width))` }}>
+      {!stickyAxis && axis}
       {groups.map(group => {
         const expanded = !collapsed.has(group.itemId), contentId = `${chartId}-part-${group.itemId}`;
         const completed = group.rows.filter(row => row.process.status === 'completed').length;

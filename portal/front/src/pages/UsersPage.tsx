@@ -1,3 +1,4 @@
+import { fetchPortalCompanies } from '../services/companies';
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Edit, Trash2, Key, Unlock, Search, X } from 'lucide-react';
 import { User, Role, Company } from '../types';
@@ -50,9 +51,7 @@ const UsersPage: React.FC = () => {
 
   const fetchCompanies = async () => {
     try {
-      const res = await authFetch('/api/portal/companies');
-      const data = await res.json();
-      setCompanies(Array.isArray(data) ? data : []);
+      setCompanies(await fetchPortalCompanies());
     } catch (err) {
       console.error('Failed to fetch companies:', err);
     }

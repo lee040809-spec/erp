@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { authFetch, getToken, setToken, removeToken } from './utils/auth';
+import { useState, useEffect } from 'react';
+import { authFetch, getToken, removeToken } from './utils/auth';
 import { User, Resource } from './types';
 import LoginPage from './components/LoginPage';
 import Layout from './components/Layout';

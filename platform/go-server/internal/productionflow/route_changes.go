@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-func guardRouteChange(tx *gorm.DB, corp, item int64, incoming []models.OrderProcess) error {
+func guardRouteChange(tx *gorm.DB, corp, item int64, incoming []models.OrderProcess, allowArchive bool) error {
 	var old []models.OrderProcess
 	if err := tx.Where("corp_id=? AND order_item_id=?", corp, item).Order("sort_order,id").Find(&old).Error; err != nil {
 		return err
@@ -83,11 +83,38 @@ func guardRouteChange(tx *gorm.DB, corp, item int64, incoming []models.OrderProc
 			linked[p.OrderProcessID] = true
 		}
 	}
+	// Completed external transactions retain historical references. Only outstanding supply blocks removal.
+	busyExternal := map[int64]bool{}
+	var reserved []int64
+	if err := tx.Table("outsourcing_order_lines l").Joins("JOIN outsourcing_orders o ON o.corp_id=l.corp_id AND o.id=l.outsourcing_order_id").Where("l.corp_id=? AND l.order_item_id=? AND o.status NOT IN ('cancelled','deleted') AND l.quantity>l.started_quantity", corp, item).Pluck("l.order_process_id", &reserved).Error; err != nil {
+		return err
+	}
+	for _, id := range reserved {
+		busyExternal[id] = true
+	}
+	for _, d := range dispatches {
+		if d.OpenQuantity+d.ReworkWaitingQuantity+d.ReworkOutQuantity > 0 {
+			busyExternal[d.OrderProcessID] = true
+			var ids []int64
+			if err := tx.Model(&models.OutsourcingDispatchProcess{}).Where("corp_id=? AND dispatch_id=?", corp, d.ID).Pluck("order_process_id", &ids).Error; err != nil {
+				return err
+			}
+			for _, id := range ids {
+				busyExternal[id] = true
+			}
+		}
+	}
 	for _, p := range old {
 		n, exists := next[p.ID]
 		q := quantities[p.ID]
 		used := history[p.ID] || q.StartedQuantity > 0 || q.CompletedQuantity > 0 || q.ScrapQuantity > 0 || p.ActualStartAt != nil || p.ActualEndAt != nil || p.Status != "pending"
 		if !exists {
+			if allowArchive {
+				if busyExternal[p.ID] {
+					return fmt.Errorf("%s仍有未发出的外协数量、待回厂或返工，请先完成或取消对应外协业务", p.Name)
+				}
+				continue
+			}
 			if linked[p.ID] {
 				return fmt.Errorf("%s已有外协关联，不能删除；请先处理对应外协订单或发出记录", p.Name)
 			}
@@ -106,7 +133,10 @@ func guardRouteChange(tx *gorm.DB, corp, item int64, incoming []models.OrderProc
 		if tracked && n.Status != p.Status {
 			return fmt.Errorf("%s状态由报工数量计算，请在分批生产中记录；工艺修改不应改变实际进度", p.Name)
 		}
-		if (used || linked[p.ID]) && n.IsOutsourced != p.IsOutsourced {
+		if n.IsOutsourced != p.IsOutsourced && allowArchive && (q.StartedQuantity > q.CompletedQuantity+q.ScrapQuantity || !tracked && p.Status == models.ProcessStatusProcessing) {
+			return fmt.Errorf("%s仍有在制件，不能切换加工方式；可先完成原报工，或移除后新增替代工序", p.Name)
+		}
+		if n.IsOutsourced != p.IsOutsourced && (busyExternal[p.ID] || !allowArchive && (used || linked[p.ID])) {
 			return fmt.Errorf("%s已有生产或外协记录，不能切换内制/外协；可新增工序安排后续加工", p.Name)
 		}
 	}
@@ -128,7 +158,7 @@ func guardRouteChange(tx *gorm.DB, corp, item int64, incoming []models.OrderProc
 				nextLast = p.ID
 			}
 		}
-		if previousLast != nextLast {
+		if previousLast != nextLast && (!allowArchive || next[previousLast].ID != 0) {
 			return errors.New("已有合格完工确认，须保留原末道工序；可以改名、调整计划及未开工步骤，新增末道需先处理原完工记录")
 		}
 	}
@@ -141,6 +171,15 @@ func guardRouteChange(tx *gorm.DB, corp, item int64, incoming []models.OrderProc
 		covered := []models.OutsourcingOrderLine{}
 		if err := tx.Where("corp_id=? AND outsourcing_order_id=?", corp, order.ID).Order("sequence,id").Find(&covered).Error; err != nil {
 			return err
+		}
+		busy := false
+		for _, line := range covered {
+			if busyExternal[line.OrderProcessID] {
+				busy = true
+			}
+		}
+		if allowArchive && !busy {
+			continue
 		}
 		for i, line := range covered {
 			pos, ok := positions[line.OrderProcessID]
@@ -193,6 +232,12 @@ func ReconcileRoute(tx *gorm.DB, corp, itemID int64) error {
 	}
 	for _, q := range totals {
 		if !retained[q.OrderProcessID] {
+			var archived models.OrderProcess
+			if err = tx.Unscoped().Where("id=? AND corp_id=? AND order_item_id=? AND deleted_at IS NOT NULL", q.OrderProcessID, corp, itemID).Take(&archived).Error; err == nil {
+				continue
+			} else if err != gorm.ErrRecordNotFound {
+				return err
+			}
 			if q.StartedQuantity != 0 || q.CompletedQuantity != 0 || q.ScrapQuantity != 0 {
 				return errors.New("不能删除有数量的工序")
 			}
@@ -208,7 +253,11 @@ func ReconcileRoute(tx *gorm.DB, corp, itemID int64) error {
 	if err = tx.Table("production_completions").Where("corp_id=? AND order_item_id=? AND status='confirmed'", corp, itemID).Select("CAST(COALESCE(SUM(qualified_quantity),0) AS SIGNED)").Scan(&confirmed).Error; err != nil {
 		return err
 	}
-	last := byID[ps[len(ps)-1].ID].CompletedQuantity
+	losses, e := archivedLosses(tx, corp, itemID)
+	if e != nil {
+		return e
+	}
+	last := byID[ps[len(ps)-1].ID].CompletedQuantity - terminalLoss(losses)
 	if last < confirmed || item.DeliveredQty != nil && last < *item.DeliveredQty {
 		return errors.New("调整后的末道完工数量不能少于已确认合格或已交货数量")
 	}

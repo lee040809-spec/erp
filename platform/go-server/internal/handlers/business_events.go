@@ -62,7 +62,7 @@ func (h *BusinessEventHandler) can(c *gin.Context, kind string) bool {
 	return false
 }
 func (h *BusinessEventHandler) List(c *gin.Context) {
-	if !requireModuleAccess(h.db, c, "orders", "production_orders", "production_dashboard", "production_delivery", "dashboard") {
+	if !requireModuleAccess(h.db, c, "orders", "production_orders", "production_dashboard", "production_delivery", "dashboard", "monthly_output") {
 		return
 	}
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -74,7 +74,10 @@ func (h *BusinessEventHandler) List(c *gin.Context) {
 	}
 	rows := []map[string]interface{}{}
 	err := h.db.Raw(`SELECT i.id,i.part_name,i.part_number,i.quantity,COALESCE(NULLIF(i.production_quantity,0),i.quantity) AS production_quantity,COALESCE(i.scrap_quantity,0) AS scrap_quantity,COALESCE(i.delivered_quantity,0) AS delivered_quantity,
- COALESCE(q.total,0) AS qualified_quantity,DATE_FORMAT(i.completion_date,'%Y-%m-%d') AS completion_date,
+ COALESCE(q.total,0) AS qualified_quantity,
+ CASE WHEN i.unit_price>0 AND COALESCE(i.currency,'CNY')='CNY' THEN 1 ELSE 0 END AS price_ready,
+ CASE WHEN EXISTS (SELECT 1 FROM order_processes p WHERE p.corp_id=i.corp_id AND p.order_item_id=i.id AND p.deleted_at IS NULL AND p.name<>'送货' AND p.status<>'completed') THEN 0 ELSE 1 END AS production_ready,
+ DATE_FORMAT(i.completion_date,'%Y-%m-%d') AS completion_date,
  DATE_FORMAT(d.delivery_date,'%Y-%m-%d') AS delivery_date,GREATEST(LEAST(i.quantity,COALESCE(q.total,0))-COALESCE(i.delivered_quantity,0),0) AS available_delivery
  FROM order_items i LEFT JOIN (SELECT corp_id,order_item_id,SUM(qualified_quantity) AS total FROM production_completions WHERE status='confirmed' GROUP BY corp_id,order_item_id) q ON q.corp_id=i.corp_id AND q.order_item_id=i.id
  LEFT JOIN (SELECT corp_id,order_item_id,MAX(business_date) AS delivery_date FROM order_business_records WHERE kind='delivery' AND status='confirmed' GROUP BY corp_id,order_item_id) d ON d.corp_id=i.corp_id AND d.order_item_id=i.id
@@ -101,7 +104,7 @@ func (h *BusinessEventHandler) List(c *gin.Context) {
 	}
 	records, recordsMore := trimPage(records, size)
 	completions, completionsMore := trimPage(completions, size)
-	response.Success(c, gin.H{"page": page, "page_size": size, "has_more": recordsMore || completionsMore, "completions": completions, "items": rows, "records": records, "can_complete": hasModuleAccess(h.db, c, "production_orders", "production_dashboard"), "can_scrap": h.can(c, "scrap"), "can_delivery": h.can(c, "delivery"), "can_exception": h.can(c, "exception"), "can_reverse": middleware.GetRoleType(c) == "admin", "evidence": policy})
+	response.Success(c, gin.H{"page": page, "page_size": size, "has_more": recordsMore || completionsMore, "completions": completions, "items": rows, "records": records, "can_complete": canConfirmProduction(h.db, c), "can_scrap": h.can(c, "scrap"), "can_delivery": h.can(c, "delivery"), "can_exception": h.can(c, "exception"), "can_reverse": middleware.GetRoleType(c) == "admin", "evidence": policy})
 }
 
 type businessRequest struct {
@@ -285,11 +288,11 @@ func syncDeliveryStatus(tx *gorm.DB, corp, order, item int64, delivered, ordered
 		return err
 	}
 	if delivered >= ordered {
-		if err := tx.Table("order_processes").Where("corp_id=? AND order_item_id=? AND name='送货'", corp, item).Update("status", "completed").Error; err != nil {
+		if err := tx.Table("order_processes").Where("corp_id=? AND order_item_id=? AND name='送货' AND deleted_at IS NULL", corp, item).Update("status", "completed").Error; err != nil {
 			return err
 		}
 	} else {
-		if err := tx.Table("order_processes").Where("corp_id=? AND order_item_id=? AND name='送货'", corp, item).Update("status", "pending").Error; err != nil {
+		if err := tx.Table("order_processes").Where("corp_id=? AND order_item_id=? AND name='送货' AND deleted_at IS NULL", corp, item).Update("status", "pending").Error; err != nil {
 			return err
 		}
 	}

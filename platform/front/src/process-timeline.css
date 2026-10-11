@@ -133,7 +133,7 @@
 .erp-workbench-gantt > header p:last-child {margin-top:2px}
 .erp-workbench-gantt .erp-gantt {--erp-gantt-label-width:168px;border-radius:0;border-left:0;border-right:0}
 .erp-workbench-gantt .erp-gantt-scroll {max-height:none;overflow-y:hidden}
-.erp-workbench-gantt .erp-gantt-axis,.erp-workbench-gantt .erp-gantt-group-heading {position:relative;top:auto}
+.erp-workbench-gantt .erp-gantt-group-heading {position:relative;top:auto}
 .erp-workbench-gantt .erp-gantt-group-heading,.erp-workbench-gantt .erp-gantt-group-toggle {min-height:44px}
 @media(min-width:1100px){
   .erp-workbench-gantt .erp-gantt-group-toggle {width:min(720px,calc(100% - 82px))}
@@ -150,3 +150,13 @@
 /* Keep add/delete and full-range actions together at the horizontal viewport edge. */
 .erp-gantt-group-actions {position:sticky;right:6px;margin-left:auto;align-self:center;display:flex;align-items:center;gap:4px;flex-shrink:0;padding-left:4px;background:inherit}
 .erp-gantt-group-actions .erp-gantt-view-part {position:static;margin-left:0}
+
+/* The page axis sits outside the horizontal scrollport so sticky follows the page. */
+.erp-workbench-gantt-card {overflow:visible}
+.erp-gantt.erp-gantt-page-axis {overflow:visible}
+.erp-gantt-page-axis > .erp-gantt-axis {position:sticky;top:-14px;z-index:6;box-shadow:0 2px 4px #0f172a12}
+.erp-gantt-axis-dates {flex:1;min-width:0;overflow:hidden}
+.erp-gantt-page-axis .erp-gantt-scroll {scroll-margin-top:32px}
+
+.erp-workbench-gantt.erp-page {scroll-padding-top:32px}
+@media(max-width:767px){.erp-gantt-page-axis > .erp-gantt-axis {top:-10px}}

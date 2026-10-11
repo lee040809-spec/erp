@@ -62,7 +62,7 @@ func TestProductionFlowIntegrationTemporaryTables(t *testing.T) {
 		ddl = regexp.MustCompile("AUTO_INCREMENT=[0-9]+").ReplaceAllString(ddl, "AUTO_INCREMENT=1")
 		exec(ddl)
 	}
-	workflowtest.Tables(t, db, "production_completions", "order_business_records", "cost_entries")
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records", "cost_entries")
 	date := productionflow.Today()
 	start, _ := time.Parse("2006-01-02", date)
 	start = start.AddDate(0, 0, -3)
@@ -239,6 +239,14 @@ func TestProductionFlowIntegrationTemporaryTables(t *testing.T) {
 			t.Fatal("linked outsource step changed to internal production")
 		}
 	})
+
+	t.Run("outstanding_external_work_cannot_be_retired", func(t *testing.T) {
+		var ps []models.OrderProcess
+		check(db.Where("corp_id=0 AND order_item_id=?", oi.ID).Order("sort_order,id").Find(&ps).Error)
+		if e := repo.UpdateRouteForCorp(0, oi.ID, 1, ps[:1], nil, repository.RouteChangeOptions{AllowProcessedChanges: true, Reason: "仍有待回厂"}); e == nil {
+			t.Fatal("outstanding external transaction detached")
+		}
+	})
 	input.Quantity = 501
 	if _, e = outsourcing.Dispatch(db, 0, 1, input); e == nil {
 		t.Fatal("same request changed silently")
@@ -282,6 +290,30 @@ func TestProductionFlowIntegrationTemporaryTables(t *testing.T) {
 		t.Fatal("outsourcing cost repeated")
 	}
 	t.Log("outsourcing 500 → accepted470 / scrap30; rework not double-started; exact net cost900 posted and allocated once")
+
+	t.Run("settled_external_history_survives_retirement", func(t *testing.T) {
+		var ps []models.OrderProcess
+		check(db.Where("corp_id=0 AND order_item_id=?", oi.ID).Order("sort_order,id").Find(&ps).Error)
+		check(repo.UpdateRouteForCorp(0, oi.ID, 1, ps[:1], nil, repository.RouteChangeOptions{AllowProcessedChanges: true, Reason: "取消已结束外协工序"}))
+		view, e := productionflow.Read(db, 0, oi.ID)
+		check(e)
+		if view.AvailableCompletion != 0 || view.Item.ScrapQuantity != 30 {
+			t.Fatal("retired external scrap duplicated good output")
+		}
+		var archived models.OrderProcess
+		check(db.Unscoped().First(&archived, ps[1].ID).Error)
+		if !archived.DeletedAt.Valid {
+			t.Fatal("external history missing")
+		}
+		var count int64
+		check(db.Model(&models.OutsourcingSettlement{}).Where("dispatch_id=?", d.ID).Count(&count).Error)
+		if count != 1 {
+			t.Fatal("retirement erased settlement")
+		}
+		if e := productionflow.CompletionReady(db, 0, oi.ID, 1, nil, date); e == nil {
+			t.Fatal("scrapped external units were counted again")
+		}
+	})
 	var scrapRecord BusinessRecord
 	check(db.Where("order_item_id=? AND source_type='process_quantity'", oi.ID).Take(&scrapRecord).Error)
 	call(business.Reverse, `{"reason":"cannot desync automated scrap"}`, gin.Params{{Key: "recordId", Value: fmt.Sprint(scrapRecord.ID)}}, 400)
@@ -304,4 +336,195 @@ func TestProductionFlowIntegrationTemporaryTables(t *testing.T) {
 		b, _ := json.Marshal(rec.Body.String())
 		t.Fatalf("cost authority bypassed: %s", b)
 	}
+}
+
+func TestProcessedRouteIntegrationTemporaryTables(t *testing.T) {
+	if os.Getenv("RUN_FINANCE_INTEGRATION") != "1" {
+		t.Skip("explicit test database required")
+	}
+	cfg := driver.NewConfig()
+	cfg.User = os.Getenv("MYSQL_USER")
+	cfg.Passwd = os.Getenv("MYSQL_PASSWORD")
+	cfg.Net = "tcp"
+	cfg.Addr = os.Getenv("MYSQL_HOST") + ":3306"
+	cfg.DBName = os.Getenv("MYSQL_DATABASE")
+	cfg.ParseTime = true
+	db, e := gorm.Open(mysql.Open(cfg.FormatDSN()), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if e != nil {
+		t.Fatal("database unavailable")
+	}
+	pool, _ := db.DB()
+	pool.SetMaxOpenConns(1)
+	pool.SetMaxIdleConns(1)
+	defer pool.Close()
+	check := func(e error) {
+		t.Helper()
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	exec := func(q string) { t.Helper(); check(db.Exec(q).Error) }
+	// Definitions are read; every write below targets a connection-local TEMPORARY table.
+	for _, name := range []string{"orders", "order_items", "order_processes", "process_time_events", "production_completions", "order_business_records", "cost_entries", "cost_allocations", "monthly_closings", "business_entry_policies", "production_plans"} {
+		var table, ddl string
+		check(pool.QueryRow("SHOW CREATE TABLE `"+name+"`").Scan(&table, &ddl))
+		kept := []string{}
+		for _, line := range strings.Split(ddl, "\n") {
+			if !strings.Contains(line, "FOREIGN KEY") {
+				kept = append(kept, line)
+			}
+		}
+		ddl = regexp.MustCompile(",\\s*\\)").ReplaceAllString(strings.Join(kept, "\n"), "\n)")
+		ddl = strings.Replace(ddl, "CREATE TABLE", "CREATE TEMPORARY TABLE", 1)
+		ddl = regexp.MustCompile("AUTO_INCREMENT=[0-9]+").ReplaceAllString(ddl, "AUTO_INCREMENT=1")
+		exec(ddl)
+	}
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records", "cost_entries")
+	date := productionflow.Today()
+	start, _ := time.Parse("2006-01-02", date)
+	start = start.AddDate(0, 0, -3)
+	due := start.AddDate(0, 1, 0)
+
+	repo := repository.NewOrderRepository(db)
+	exec("CREATE TEMPORARY TABLE users(id BIGINT,corp_id BIGINT,role_id BIGINT)")
+	exec("CREATE TEMPORARY TABLE permissions(role_id BIGINT,corp_id BIGINT,resource_id BIGINT)")
+	exec("CREATE TEMPORARY TABLE resources(id BIGINT,resource_key VARCHAR(100))")
+
+	order := models.Order{CorpID: 0, OrderNumber: "RETIRED-TEST", StartDate: &start, DueDate: &due}
+	part := models.OrderItem{PartName: "RETIRED-TEST", Quantity: 100, ProductionQuantity: 100, UnitPrice: 2, SupplyMode: "self_purchased", Currency: "CNY", Processes: []models.OrderProcess{{Name: "下料", Status: "pending"}, {Name: "铣削", Status: "pending"}, {Name: "检验", Status: "pending"}, {Name: "送货", Status: "pending"}}}
+	_, e = repo.Create(&order, []models.OrderItem{part}, 1)
+	check(e)
+	var item models.OrderItem
+	check(db.Where("order_id=?", order.ID).Take(&item).Error)
+	check(db.Transaction(func(tx *gorm.DB) error {
+		i, e := productionflow.LockItem(tx, 0, item.ID)
+		if e != nil {
+			return e
+		}
+		return productionflow.Activate(tx, i, nil, 1)
+	}))
+	original, e := productionflow.Read(db, 0, item.ID)
+	check(e)
+	count := 0
+	report := func(process int64, kind string, q int, wantError bool) {
+		t.Helper()
+		count++
+		e := productionflow.Report(db, 0, item.ID, process, 1, productionflow.ReportInput{Kind: kind, Quantity: q, Date: date, RequestID: fmt.Sprintf("retire-%d", count)})
+		if wantError {
+			if e == nil {
+				t.Fatal("invalid quantity accepted")
+			}
+		} else {
+			check(e)
+		}
+	}
+	cut, mill, inspection := original.Processes[0].ID, original.Processes[1].ID, original.Processes[2].ID
+	report(cut, "start", 100, false)
+	report(cut, "complete", 100, false)
+	report(mill, "start", 60, false)
+	report(mill, "complete", 40, false)
+	report(mill, "scrap", 5, false)
+	h := NewProcessTimelineHandler(db)
+	call := func(fn gin.HandlerFunc, itemID int64, body string, role string, want int) map[string]interface{} {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(rec)
+		ctx.Set("corpID", int64(0))
+		ctx.Set("userID", int64(1))
+		ctx.Set("roleType", role)
+		ctx.Params = gin.Params{{Key: "itemId", Value: fmt.Sprint(itemID)}}
+		ctx.Request = httptest.NewRequest("PATCH", "/", strings.NewReader(body))
+		ctx.Request.Header.Set("Content-Type", "application/json")
+		fn(ctx)
+		if rec.Code != want {
+			t.Fatalf("HTTP want %d got %d: %s", want, rec.Code, rec.Body.String())
+		}
+		var out struct{ Data map[string]interface{} }
+		json.Unmarshal(rec.Body.Bytes(), &out)
+		return out.Data
+	}
+	load := func() []models.OrderProcess {
+		t.Helper()
+		var ps []models.OrderProcess
+		check(db.Where("corp_id=0 AND order_item_id=?", item.ID).Order("sort_order,id").Find(&ps).Error)
+		return ps
+	}
+	payload := func(ps []models.OrderProcess, allow bool, reason string) string {
+		data, e := json.Marshal(map[string]interface{}{"processes": ps, "allow_processed_changes": allow, "reason": reason})
+		check(e)
+		return string(data)
+	}
+	current := load()
+	current[1].Name = "铣削（已开工工艺修订）"
+	current[1].Status = "pending"
+	call(h.SaveRoute, item.ID, payload(current, true, "更正工序名称"), "admin", 200)
+	var retained models.OrderProcess
+	check(db.First(&retained, mill).Error)
+	if retained.Status != "processing" || retained.ActualStartAt == nil {
+		t.Fatal("amendment reset actual production")
+	}
+	current = load()
+	current[0].IsOutsourced = true
+	call(h.SaveRoute, item.ID, payload(current, true, "更正已完成工序的加工方式"), "admin", 200)
+	current = load()
+	current[0].IsOutsourced = false
+	call(h.SaveRoute, item.ID, payload(current, true, "恢复加工方式"), "admin", 200)
+	current = load()
+	next := []models.OrderProcess{current[0], current[2], current[3]}
+	call(h.SaveRoute, item.ID, payload(next, true, ""), "admin", 400)
+	call(h.SaveRoute, item.ID, payload(next, false, "未确认删除已加工工序"), "admin", 400)
+	call(h.SaveRoute, item.ID, payload(next, true, "工艺变更，取消铣削并保留报废记录"), "business", 403)
+	var beforeEvents int64
+	check(db.Model(&models.ProcessQuantityEvent{}).Where("order_item_id=?", item.ID).Count(&beforeEvents).Error)
+	call(h.SaveRoute, item.ID, payload(next, true, "工艺变更，取消铣削并保留报废记录"), "admin", 200)
+	archived := models.OrderProcess{}
+	check(db.Unscoped().First(&archived, mill).Error)
+	if !archived.DeletedAt.Valid || archived.Status != "processing" || archived.ActualStartAt == nil {
+		t.Fatal("removed step lost history")
+	}
+	if db.First(&models.OrderProcess{}, mill).Error != gorm.ErrRecordNotFound {
+		t.Fatal("removed step remains active")
+	}
+	var totals models.ProcessQuantity
+	check(db.Where("order_process_id=?", mill).Take(&totals).Error)
+	if totals.StartedQuantity != 60 || totals.CompletedQuantity != 40 || totals.ScrapQuantity != 5 {
+		t.Fatal("retired totals changed")
+	}
+	var events int64
+	check(db.Model(&models.ProcessQuantityEvent{}).Where("order_item_id=?", item.ID).Count(&events).Error)
+	if beforeEvents != events {
+		t.Fatal("route retirement fabricated or erased reports")
+	}
+	revised, e := productionflow.Read(db, 0, item.ID)
+	check(e)
+	if len(revised.Processes) != 2 || revised.Processes[1].AvailableStart != 95 || revised.Item.ScrapQuantity != 5 || revised.HistoricalProcessNames[mill] != archived.Name {
+		t.Fatalf("retired scrap/history mismatch: %+v", revised)
+	}
+	report(inspection, "start", 96, true)
+	report(inspection, "start", 95, false)
+	report(inspection, "complete", 95, false)
+	finance := NewProductionFinanceHandler(db)
+	call(finance.CreateCompletion, item.ID, fmt.Sprintf("{\"qualified_quantity\":95,\"business_date\":%q,\"request_id\":\"retired-qualified\"}", date), "admin", 200)
+	current = load()
+	call(h.SaveRoute, item.ID, payload([]models.OrderProcess{current[0], current[2]}, true, "取消末道检验，保留原合格确认"), "admin", 200)
+	revised, e = productionflow.Read(db, 0, item.ID)
+	check(e)
+	if len(revised.Processes) != 1 || revised.AvailableCompletion != 0 {
+		t.Fatalf("retired successor lost scrap anchor or duplicated output: %+v", revised)
+	}
+	if e := productionflow.CompletionReady(db, 0, item.ID, 1, nil, date); e == nil {
+		t.Fatal("retired terminal duplicated confirmed output")
+	}
+	data := call(h.List, item.ID, "", "admin", 200)
+	if len(data["archived_processes"].([]interface{})) != 2 {
+		t.Fatal("timeline omitted archived history")
+	}
+	current = load()
+	call(h.SaveRoute, item.ID, payload([]models.OrderProcess{current[1]}, true, "不能删除全部生产工序"), "admin", 400)
+	var pc models.ProductionCompletion
+	check(db.Where("order_item_id=?", item.ID).Take(&pc).Error)
+	if pc.QualifiedQuantity != "95.000" && pc.QualifiedQuantity != "95" {
+		t.Fatalf("posted quantity changed: %s", pc.QualifiedQuantity)
+	}
+	t.Log("in-progress and completed retirement preserves reports, scrap, qualified output, successor anchors, audit and permissions")
 }

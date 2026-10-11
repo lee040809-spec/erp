@@ -85,7 +85,7 @@ func SyncProcesses(tx *gorm.DB, item models.OrderItem) error {
 		if t.StartedQuantity > 0 && t.CompletedQuantity >= item.ProductionQuantity-item.ScrapQuantity {
 			status = "completed"
 		}
-		if err := tx.Table("order_processes").Where("id=? AND corp_id=?", t.OrderProcessID, item.CorpID).Update("status", status).Error; err != nil {
+		if err := tx.Table("order_processes").Where("id=? AND corp_id=? AND deleted_at IS NULL", t.OrderProcessID, item.CorpID).Update("status", status).Error; err != nil {
 			return err
 		}
 	}

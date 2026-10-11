@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Plus, FileText, Search, Settings, Trash2, RefreshCw, Eye, Upload, Link2, Unlink, Download, Printer } from 'lucide-react';
 import { authFetch } from '../components/shared';
 import UniverSheet from '../components/UniverSheet';
-import pako from 'pako';
+import { decodePrintTemplate, encodePrintTemplate } from '../utils/templateCodec';
 import UniverImportExport from '@mertdeveci55/univer-import-export';
 
 interface PageResource {
@@ -176,32 +176,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
     }
 
     try {
-      let workbookData: any;
-
-      // 检查数据格式
-      if (preview.startsWith('GZIP:')) {
-        const base64 = preview.substring(5);
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const decompressed = pako.inflate(bytes, { to: 'string' });
-        workbookData = JSON.parse(decompressed);
-      } else if (preview.startsWith('UNIVER:')) {
-        // 新格式：Univer workbook数据
-        const base64 = preview.substring(7);
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const decompressed = pako.inflate(bytes, { to: 'string' });
-        workbookData = JSON.parse(decompressed);
-      } else {
-        // 直接JSON
-        workbookData = JSON.parse(preview);
-      }
+      const workbookData = decodePrintTemplate(preview);
 
       setPreviewSheetData(workbookData);
       setShowPreviewModal(true);
@@ -263,10 +238,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
         }
 
         // gzip压缩Univer workbook数据
-        const workbookJson = JSON.stringify(workbookData);
-        const compressed = pako.gzip(workbookJson);
-        const base64 = btoa(String.fromCharCode(...compressed));
-        const compressedData = 'UNIVER:' + base64;
+        const compressedData = encodePrintTemplate(workbookData);
 
         // 上传到后端
         const formData = new FormData();
@@ -285,7 +257,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
             showToast('导入成功', 'success');
             fetchData();
           })
-          .catch(err => {
+          .catch(_err => {
             alert('上传失败');
           })
           .finally(() => {
@@ -412,14 +384,12 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
     try {
       // gzip压缩Univer workbook数据
-      const workbookJson = JSON.stringify(workbookData);
-      const compressed = pako.gzip(workbookJson);
-      const base64 = btoa(String.fromCharCode(...compressed));
+      const compressedData = encodePrintTemplate(workbookData);
 
       const res = await authFetch(`/api/platform/print-templates/${previewTemplateId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ template: 'UNIVER:' + base64 })
+        body: JSON.stringify({ template: compressedData })
       });
       const result = await res.json();
 

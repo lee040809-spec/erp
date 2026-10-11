@@ -43,7 +43,7 @@ func (h *ProductionFlowHandler) Read(c *gin.Context) {
 	if !canViewOrderAmounts(h.db, c) {
 		data = withoutAmounts(data)
 	}
-	response.Success(c, gin.H{"flow": data, "can_manage": hasModuleAccess(h.db, c, "orders", "production_orders", "production_dashboard"), "can_complete": hasModuleAccess(h.db, c, "production_orders", "production_dashboard"), "can_settle": NewProductionFinanceHandler(h.db).canManageFinanceCosts(c)})
+	response.Success(c, gin.H{"flow": data, "can_manage": hasModuleAccess(h.db, c, "orders", "production_orders", "production_dashboard"), "can_complete": canConfirmProduction(h.db, c), "can_settle": NewProductionFinanceHandler(h.db).canManageFinanceCosts(c)})
 }
 func (h *ProductionFlowHandler) Activate(c *gin.Context) {
 	if !flowWrite(h.db, c) {

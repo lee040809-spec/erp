@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import type { WorkbenchOrderTarget, WorkbenchState } from './services/workbenchNavigation';
 import { saveProcessStatus, ProcessSaveNotice } from './services/processStatus';
-import { LayoutDashboard, ClipboardList, Package, CircleDollarSign, Plus, Search, Calendar, CheckCircle2, AlertCircle, AlertTriangle, ChevronRight, ChevronDown, ChevronUp, FileText, Image as ImageIcon, User, Users, Settings, Menu, X, TrendingUp, Sparkles, Download, Eye, Trash2, GripVertical, Settings2, Link as LinkIcon, RefreshCw, Edit } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { RefreshCw } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
 import { Order, OrderProcess, Customer, Material, Remnant } from './types';
 import LoginPage from './LoginPage';
@@ -12,7 +12,7 @@ import ErrorModal from './components/ErrorModal';
 import ValidationAlertModal from './components/ValidationAlertModal';
 import { createEmptyFilters, createOrderFilters } from './configs/filterConfigs';
 import { formatDate, authFetch } from './components/shared';
-import { NAV_ITEMS, NavItem, withOperationalMenus } from './constants/navigation';
+import { NAV_ITEMS, withOperationalMenus } from './constants/navigation';
 import { useOrders } from './hooks/useOrders';
 import { canEditOrderPrices } from './utils/orderAmounts';
 import * as LucideIcons from 'lucide-react';
@@ -51,8 +51,6 @@ const UserSettingsModal = lazy(() => import('./components/UserSettingsModal'));
 import type { RuleForm } from './components/RuleModal';
 import type { FormErrors } from './components/OrderModal';
 import type { OrderFilters } from './services/orderService';
-// --- AI Service ---
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 // --- Main App ---
 declare global {
     interface Window {
@@ -137,7 +135,7 @@ export default function App() {
         };
         checkAuth();
     }, []);
-    const handleLoginSuccess = (token: string, user: {
+    const handleLoginSuccess = (_token: string, user: {
         id: number;
         username: string;
         name: string;
@@ -241,7 +239,7 @@ export default function App() {
     const [dashboardPage, setDashboardPage] = useState(1);
     const [dashboardPageSize, setDashboardPageSize] = useState(10);
     const [dashboardTotal, setDashboardTotal] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
+    const [, setIsLoading] = useState(true);
     // Modals
     const [showOrderModal, setShowOrderModal] = useState(false);
     const [showAiModal, setShowAiModal] = useState(false);
@@ -737,18 +735,6 @@ export default function App() {
             setIsSaving(false);
         }
     };
-    // Customer Management Functions
-    const handleOpenCustomerModal = (customer?: Customer) => {
-        if (customer) {
-            setEditingCustomer(customer);
-            setNewCustomer({ name: customer.name, short_name: customer.short_name || '', contacts: customer.contacts || [] });
-        }
-        else {
-            setEditingCustomer(null);
-            setNewCustomer({ name: '', short_name: '', contacts: [] });
-        }
-        setShowCustomerModal(true);
-    };
     const handleSaveCustomer = async () => {
         if (!newCustomer.name.trim()) {
             alert('请输入客户名称');
@@ -801,19 +787,6 @@ export default function App() {
         }
         catch (error) {
             console.error("Failed to delete customer", error);
-        }
-    };
-    const updateItemStatus = async (itemId: number, status: any) => {
-        try {
-            await authFetch(`/api/platform/order-items/${itemId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status })
-            });
-            fetchData();
-        }
-        catch (error) {
-            console.error("Failed to update item status", error);
         }
     };
     // Show loading while checking auth

@@ -73,7 +73,7 @@ func TestOrderIntegrityTemporaryTables(t *testing.T) {
 		ddl = regexp.MustCompile("AUTO_INCREMENT=[0-9]+").ReplaceAllString(ddl, "AUTO_INCREMENT=1")
 		check(db.Exec(ddl).Error)
 	}
-	workflowtest.Tables(t, db, "production_completions", "order_business_records", "cost_entries")
+	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records", "cost_entries")
 	repo := NewOrderRepository(db)
 	fee := 100.0
 	order := models.Order{CorpID: 0, OrderNumber: "TEMP-A"}

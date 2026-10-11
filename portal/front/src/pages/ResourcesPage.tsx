@@ -5,7 +5,7 @@ import { authFetch } from '../utils/auth';
 
 const ResourcesPage: React.FC = () => {
   const [resources, setResources] = useState<Resource[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [formData, setFormData] = useState({

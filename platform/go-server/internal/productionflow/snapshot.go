@@ -22,12 +22,13 @@ type ProcessProgress struct {
 	AvailableOrder      int  `json:"available_order"`
 }
 type Snapshot struct {
-	Item                models.OrderItem              `json:"item"`
-	Tracking            bool                          `json:"tracking"`
-	Processes           []ProcessProgress             `json:"processes"`
-	Batches             []models.DeliveryBatch        `json:"batches"`
-	Events              []models.ProcessQuantityEvent `json:"events"`
-	AvailableCompletion int                           `json:"available_completion"`
+	HistoricalProcessNames map[int64]string              `json:"historical_process_names"`
+	Item                   models.OrderItem              `json:"item"`
+	Tracking               bool                          `json:"tracking"`
+	Processes              []ProcessProgress             `json:"processes"`
+	Batches                []models.DeliveryBatch        `json:"batches"`
+	Events                 []models.ProcessQuantityEvent `json:"events"`
+	AvailableCompletion    int                           `json:"available_completion"`
 }
 
 func Read(db *gorm.DB, corp, itemID int64) (Snapshot, error) {
@@ -62,8 +63,17 @@ func Read(db *gorm.DB, corp, itemID int64) (Snapshot, error) {
 	for _, r := range reservations {
 		reserved[r.OrderProcessID] = r.Quantity
 	}
+	losses, err := archivedLosses(db, corp, itemID)
+	if err != nil {
+		return s, err
+	}
+	s.HistoricalProcessNames, err = archivedProcessNames(db, corp, itemID)
+	if err != nil {
+		return s, err
+	}
 	available := s.Item.ProductionQuantity
 	for _, p := range ps {
+		available -= lossBefore(losses, p.ID)
 		t := byID[p.ID]
 		s.Processes = append(s.Processes, ProcessProgress{OrderProcess: p, Tracking: t.ID > 0, Started: t.StartedQuantity, Completed: t.CompletedQuantity, Scrap: t.ScrapQuantity, AvailableStart: max(0, available-t.StartedQuantity), InProgress: max(0, t.StartedQuantity-t.CompletedQuantity-t.ScrapQuantity), OutsourcingReserved: reserved[p.ID], AvailableOrder: max(0, s.Item.ProductionQuantity-t.StartedQuantity-reserved[p.ID])})
 		available = t.CompletedQuantity
@@ -71,6 +81,9 @@ func Read(db *gorm.DB, corp, itemID int64) (Snapshot, error) {
 	var confirmed int
 	if err = db.Table("production_completions").Where("corp_id=? AND order_item_id=? AND status='confirmed'", corp, itemID).Select("CAST(COALESCE(SUM(qualified_quantity),0) AS SIGNED)").Scan(&confirmed).Error; err != nil {
 		return s, err
+	}
+	if len(ps) > 0 {
+		available -= terminalLoss(losses)
 	}
 	s.AvailableCompletion = max(0, available-confirmed)
 	if err = db.Where("corp_id=? AND order_item_id=?", corp, itemID).Order("due_date,id").Find(&s.Batches).Error; err != nil {

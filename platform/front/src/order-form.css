@@ -1,0 +1,64 @@
+/* Scoped to the order form: nested process dialogs keep their own sizing. */
+.erp-order-dialog-header {padding:12px 20px;flex-shrink:0;}
+.erp-order-dialog-body {padding:14px 20px;min-height:0;}
+.erp-order-dialog-body > * + * {margin-top:10px;}
+.erp-order-dialog-footer {padding:10px 20px;flex-shrink:0;}
+.erp-order-header-card,.erp-order-part-card {padding:12px;border-radius:14px;}
+.erp-order-part-card > * + * {margin-top:8px;}
+.erp-order-header-fields,.erp-order-item-fields {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px 12px;align-items:end;}
+.erp-order-header-fields > *,.erp-order-item-fields > * {min-width:0;}
+.erp-order-header-notes {grid-column:span 2;}
+.erp-order-item-name,.erp-order-item-number,.erp-order-item-process {grid-column:span 2;}
+.erp-order-item-fields:not(.has-prices):not(.has-material) > .erp-order-item-process {grid-column:1/-1;}
+.erp-order-item-fields > .erp-order-item-process > .erp-label {margin-bottom:4px;}
+.erp-order-item-process > .relative > button:first-child {min-height:34px;}
+.erp-order-material-heading {display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:18px;margin-bottom:4px;}
+.erp-order-tax {display:flex;align-items:center;gap:4px;font-size:12px;color:#64748b;white-space:nowrap;}
+.erp-order-tax > input {width:14px;height:14px;}
+.erp-order-item-price > input,.erp-order-item-total > input {background:#f5f8ff;font-variant-numeric:tabular-nums;}
+.erp-order-create-hint {padding:7px 10px;}
+.erp-order-part-card > details > summary {padding:8px 10px;}
+.erp-order-part-card > section {padding:8px 10px;}
+.erp-order-part-card > section > * + * {margin-top:7px;}
+@media(min-width:768px) {
+  .erp-order-header-fields > .erp-label > .erp-input,
+  .erp-order-header-customer > .erp-label > .erp-input,
+  .erp-order-item-fields > .erp-label > .erp-input,
+  .erp-order-item-material > .erp-input {min-height:34px;height:34px;padding:5px 9px;border-radius:8px;margin-top:4px;}
+  .erp-order-item-material > .erp-input {margin-top:0;}
+  .erp-order-part-card > section > div > .erp-btn {min-height:30px;padding:4px 9px;}
+}
+@media(min-width:1100px) {
+  .erp-order-header-fields,.erp-order-item-fields {grid-template-columns:repeat(12,minmax(0,1fr));}
+  .erp-order-header-customer {grid-column:span 3;}
+  .erp-order-header-contact,.erp-order-header-date,.erp-order-header-number,.erp-order-header-name {grid-column:span 2;}
+  .erp-order-header-priority {grid-column:span 1;}
+  .erp-order-header-notes {grid-column:span 6;}
+  /* Five fields in row one; process, prices and material share row two. */
+  .erp-order-item-name,.erp-order-item-number {grid-column:span 3;}
+  .erp-order-item-quantity,.erp-order-item-production,.erp-order-item-due,
+  .erp-order-item-price,.erp-order-item-total,.erp-order-item-material {grid-column:span 2;}
+  .erp-order-item-process {grid-column:span 12;}
+  .erp-order-item-fields.has-prices > .erp-order-item-process {grid-column:span 8;}
+  .erp-order-item-fields.has-material > .erp-order-item-process {grid-column:span 10;}
+  .erp-order-item-fields.has-prices.has-material > .erp-order-item-process {grid-column:span 6;}
+}
+@media(max-width:767px) {
+  .erp-order-dialog .erp-order-dialog-header {padding:12px 14px;}
+  .erp-order-dialog-body {padding:12px;}
+  .erp-order-dialog-footer {padding:10px 12px;flex-wrap:wrap;}
+  .erp-order-header-card,.erp-order-part-card {padding:10px;}
+  .erp-order-dialog .erp-order-header-fields,.erp-order-dialog .erp-order-item-fields {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;}
+  .erp-order-dialog .erp-order-header-fields > *,.erp-order-dialog .erp-order-item-fields > * {grid-column:auto;}
+  .erp-order-dialog .erp-order-header-customer,.erp-order-dialog .erp-order-header-notes,
+  .erp-order-dialog .erp-order-item-name,.erp-order-dialog .erp-order-item-number,
+  .erp-order-dialog .erp-order-item-due,.erp-order-dialog .erp-order-item-process,
+  .erp-order-dialog .erp-order-item-material {grid-column:1/-1;}
+  .erp-order-item-process > .relative > button:first-child {min-height:44px;}
+  .erp-order-item-material > .erp-input {margin-top:4px;}
+  .erp-order-tax {min-height:24px;}
+  .erp-order-tax > input {width:20px;height:20px;}
+}
+@media(max-width:359px) {
+  .erp-order-dialog .erp-order-header-fields,.erp-order-dialog .erp-order-item-fields {grid-template-columns:1fr;}
+}

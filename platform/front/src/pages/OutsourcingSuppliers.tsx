@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { OutsourcingSupplier, SupplierPage } from '../types/outsourcingOrder';
 import { flowRequest } from '../services/productionFlow';
 

@@ -1,4 +1,4 @@
-import React, {useEffect,useState} from 'react';
+import { useEffect, useState } from 'react';
 import type {SupplierPage} from '../types/outsourcingOrder';
 import {flowRequest} from '../services/productionFlow';
 export default function OutsourcingSupplierPicker({value,onChange,refresh=0,selected,autoFocus=false}:{value:string;onChange:(id:string)=>void;refresh?:number;autoFocus?:boolean;selected?:{id:number;name:string}}){

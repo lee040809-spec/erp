@@ -360,7 +360,7 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
-  app.get("/api/health", (req, res) => {
+  app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", version: "mysql", time: new Date().toISOString() });
   });
 
@@ -487,7 +487,7 @@ async function startServer() {
   });
 
   // Customers
-  app.get("/api/customers", async (req, res) => {
+  app.get("/api/customers", async (_req, res) => {
     const [rows] = await pool.execute("SELECT * FROM customers ORDER BY name");
     res.json(rows);
   });
@@ -515,7 +515,7 @@ async function startServer() {
   });
 
   // Orders
-  app.get("/api/orders", async (req, res) => {
+  app.get("/api/orders", async (_req, res) => {
     const [orders] = await pool.execute(`
       SELECT orders.*,
         COALESCE(orders.customer_name, customers.name) as customer_name
@@ -786,7 +786,7 @@ async function startServer() {
   });
 
   // Materials
-  app.get("/api/materials", async (req, res) => {
+  app.get("/api/materials", async (_req, res) => {
     const [rows] = await pool.execute("SELECT * FROM materials");
     res.json(rows);
   });
@@ -801,7 +801,7 @@ async function startServer() {
   });
 
   // Remnants
-  app.get("/api/remnants", async (req, res) => {
+  app.get("/api/remnants", async (_req, res) => {
     const [rows] = await pool.execute(`
       SELECT remnants.*, materials.name as material_name
       FROM remnants
@@ -820,7 +820,7 @@ async function startServer() {
   });
 
   // Finance / Reconciliation
-  app.get("/api/finance/reconciliation", async (req, res) => {
+  app.get("/api/finance/reconciliation", async (_req, res) => {
     const [rows] = await pool.execute(`
       SELECT
         DATE_FORMAT(orders.due_date, '%Y-%m') as month,
@@ -891,7 +891,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static("dist"));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.resolve("dist/index.html"));
     });
   }
