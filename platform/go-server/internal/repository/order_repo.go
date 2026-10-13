@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"machining-erp/internal/drawings"
 	"machining-erp/internal/productionflow"
 	"time"
 
@@ -65,6 +66,9 @@ func (r *OrderRepository) Create(order *models.Order, items []models.OrderItem, 
 
 			// 插入工序
 			for j := range processes {
+				if err := models.NormalizeCuttingSpec(&processes[j]); err != nil {
+					return err
+				}
 				processes[j].OrderItemID = items[i].ID
 				processes[j].CorpID = order.CorpID
 				processes[j].SortOrder = j
@@ -73,6 +77,9 @@ func (r *OrderRepository) Create(order *models.Order, items []models.OrderItem, 
 				}
 			}
 			items[i].Processes = processes
+			if e := drawings.Bind(tx, items[i], items[i].DrawingIDs, actor, "新建订单关联图纸"); e != nil {
+				return e
+			}
 			if len(items[i].DeliveryPlan) > 0 {
 				if e := productionflow.ConfigureBatches(tx, items[i], items[i].DeliveryPlan, nil, actor); e != nil {
 					return e
@@ -179,6 +186,9 @@ func handleProcesses(tx *gorm.DB, itemID, corpID int64, processes []models.Order
 
 	// 更新或插入工序
 	for j := range processes {
+		if err := models.NormalizeCuttingSpec(&processes[j]); err != nil {
+			return err
+		}
 		processes[j].OrderItemID = itemID
 		processes[j].CorpID = corpID
 		processes[j].SortOrder = j
@@ -188,11 +198,17 @@ func handleProcesses(tx *gorm.DB, itemID, corpID int64, processes []models.Order
 			if err := tx.Where("id=? AND corp_id=? AND order_item_id=?", processes[j].ID, corpID, itemID).Take(&previous).Error; err != nil {
 				return err
 			}
+			if processes[j].CuttingSpec == nil {
+				processes[j].CuttingSpec = previous.CuttingSpec
+			}
 			timeFields, err := ApplyProcessTimeTransition(tx, previous, processes[j].Status, actor)
 			if err != nil {
 				return err
 			}
 			fields := map[string]interface{}{"name": processes[j].Name, "is_outsourced": processes[j].IsOutsourced, "outsourcing_fee": processes[j].OutsourcingFee, "status": processes[j].Status, "sort_order": j}
+			if processes[j].CuttingSpec != nil {
+				fields["cutting_spec"] = *processes[j].CuttingSpec
+			}
 			for key, value := range timeFields {
 				fields[key] = value
 			}
@@ -215,8 +231,9 @@ func handleProcesses(tx *gorm.DB, itemID, corpID int64, processes []models.Order
 					return err
 				}
 			}
-			if previous.Name != processes[j].Name || previous.SortOrder != j || previous.IsOutsourced != processes[j].IsOutsourced {
+			if !models.SameCuttingSpec(previous.CuttingSpec, processes[j].CuttingSpec) || previous.Name != processes[j].Name || previous.SortOrder != j || previous.IsOutsourced != processes[j].IsOutsourced {
 				after := previous
+				after.CuttingSpec = processes[j].CuttingSpec
 				after.Name, after.SortOrder, after.IsOutsourced = processes[j].Name, j, processes[j].IsOutsourced
 				if err := RecordProcessTimeEvent(tx, previous, after, actor, "route", routeChangeReason(change)); err != nil {
 					return err
@@ -477,6 +494,7 @@ func (r *OrderRepository) Update(order *models.Order, items []models.OrderItem, 
 							items[i].Processes[j].OutsourcingFee = 0
 						}
 					}
+					items[i].DrawingChangeReason = "新增订单零件关联图纸"
 					// 插入新的订单项：清空所有工序ID，确保全新插入
 					for j := range items[i].Processes {
 						items[i].Processes[j].ID = 0
@@ -510,6 +528,15 @@ func (r *OrderRepository) Update(order *models.Order, items []models.OrderItem, 
 
 		if err := recalculateOrderAmounts(tx, order); err != nil {
 			return err
+		}
+		var drawingActor int64
+		if len(options) > 0 {
+			drawingActor = options[0].ActorID
+		}
+		for _, item := range items {
+			if e := drawings.Bind(tx, item, item.DrawingIDs, drawingActor, item.DrawingChangeReason); e != nil {
+				return e
+			}
 		}
 		// 重新计算订单状态
 		var statuses []string

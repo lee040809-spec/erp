@@ -1,4 +1,5 @@
 import React from 'react';
+import { useOrderQuery } from '../hooks/useOrderQuery';
 import { AlertCircle } from 'lucide-react';
 import { Order } from '../types';
 import OrderMonitorPanel from '../components/OrderMonitorPanel';
@@ -23,16 +24,11 @@ interface OverdueProps {
 }
 
 const Overdue: React.FC<OverdueProps> = ({ orders, orderTotal, overdueFilters, setOverdueFilters, overduePage, setOverduePage, overduePageSize, setOverduePageSize, editOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false }) => {
-  const [isSearching, setIsSearching] = React.useState(false);
+  const { isSearching, queryError, run, retry } = useOrderQuery();
 
   const applied = React.useRef(overdueFilters);
   const handlePageChange = async (nextPage: number, nextSize = overduePageSize, nextFilters = applied.current) => {
-    setIsSearching(true);
-    try {
-      await fetchOrdersWithFilters(nextFilters, nextPage, nextSize, 'overdue');
-    } finally {
-      setIsSearching(false);
-    }
+    await run(() => fetchOrdersWithFilters(nextFilters, nextPage, nextSize, 'overdue'));
   };
 
   const handleSearch = (nextFilters = overdueFilters) => {
@@ -68,6 +64,8 @@ const Overdue: React.FC<OverdueProps> = ({ orders, orderTotal, overdueFilters, s
       onSearch={() => handleSearch()}
       onReset={handleSearch}
       onPageChangeWithFilters={handlePageChange}
+      queryError={queryError}
+      onRetryQuery={retry}
       isSearching={isSearching}
     />
   );

@@ -3,6 +3,7 @@ import { Settings, X, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { PROCESS_COLORS } from './shared';
 const PROCESS_OPTIONS = ['下料', '车削', '铣削', '磨削', '线切割', '电火花', '热处理', '表面处理', '送货'];
 import type { OrderProcess as Process } from '../types';
+import CuttingSpecification, { isCuttingProcess } from './CuttingSpecification';
 import { processDate } from '../utils/processDates';
 interface ProcessCellProps {
     processes: Process[];
@@ -48,7 +49,7 @@ const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCost
             ? 'bg-zinc-50 border border-zinc-100 hover:bg-zinc-100'
             : 'bg-red-50 border border-red-300 hover:bg-red-100'}`}>
         <span className={`flex-1 truncate text-xs font-medium ${hasDelivery ? 'text-zinc-600' : 'text-red-600'}`}>
-          {processes.length > 0 ? processes.map(p => p.name).join('、') : '点击添加工序'}
+          {processes.length > 0 ? processes.map(p => p.cutting_spec ? p.name + '（' + p.cutting_spec + '）' : p.name).join('、') : '点击添加工序'}
           {!hasDelivery && processes.length > 0 && <span className="ml-1">（缺少送货）</span>}
         </span>
         <span className="shrink-0 text-xs font-semibold text-blue-600">增删工序</span>
@@ -127,6 +128,7 @@ const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCost
                 }} className="erp-btn text-rose-600 border-rose-200 py-1 min-h-8 disabled:opacity-50">
                     <Trash2 size={14}/>删除工序
                   </button>
+                  {isCuttingProcess(p.name) && <CuttingSpecification value={p.cutting_spec} label={"工序"+(idx+1)+"下料尺寸规格"} onChange={value=>onUpdate(processes.map((step,i)=>i===idx?{...step,cutting_spec:value}:step))}/>}
                   {editingIndex===idx && <div className="w-full grid grid-cols-2 gap-3 border-t pt-3"><p className="col-span-2 text-xs text-slate-500">名称和是否外协在本行修改；实际开工 / 完工时间请在工序时间窗口中更正，已有报工数量不会被清空。</p>{(['planned_start_at','planned_end_at'] as const).map((field,n)=><label key={field} className="erp-label">{n===0?'计划开始日期':'计划结束日期'}<input type="date" aria-label={'工序'+(idx+1)+(n===0?'计划开始日期':'计划结束日期')} className="erp-input" value={processDate(p[field])} onChange={e=>onUpdate(processes.map((step,i)=>i===idx?{...step,[field]:e.target.value}:step))}/></label>)}</div>}
                 </div>))}
               {processes.length === 0 && (<div className="text-center py-12 text-sm text-zinc-400 italic bg-zinc-50 rounded-xl border border-dashed border-zinc-200">

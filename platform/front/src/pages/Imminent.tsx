@@ -1,4 +1,5 @@
 import React from 'react';
+import { useOrderQuery } from '../hooks/useOrderQuery';
 import { Clock } from 'lucide-react';
 import { Order } from '../types';
 import OrderMonitorPanel from '../components/OrderMonitorPanel';
@@ -23,16 +24,11 @@ interface ImminentProps {
 }
 
 const Imminent: React.FC<ImminentProps> = ({ orders, orderTotal, imminentFilters, setImminentFilters, imminentPage, setImminentPage, imminentPageSize, setImminentPageSize, editOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false }) => {
-  const [isSearching, setIsSearching] = React.useState(false);
+  const { isSearching, queryError, run, retry } = useOrderQuery();
 
   const applied = React.useRef(imminentFilters);
   const handlePageChange = async (nextPage: number, nextSize = imminentPageSize, nextFilters = applied.current) => {
-    setIsSearching(true);
-    try {
-      await fetchOrdersWithFilters(nextFilters, nextPage, nextSize, 'near_due');
-    } finally {
-      setIsSearching(false);
-    }
+    await run(() => fetchOrdersWithFilters(nextFilters, nextPage, nextSize, 'near_due'));
   };
 
   const handleSearch = (nextFilters = imminentFilters) => {
@@ -68,6 +64,8 @@ const Imminent: React.FC<ImminentProps> = ({ orders, orderTotal, imminentFilters
       onSearch={() => handleSearch()}
       onReset={handleSearch}
       onPageChangeWithFilters={handlePageChange}
+      queryError={queryError}
+      onRetryQuery={retry}
       isSearching={isSearching}
     />
   );

@@ -92,36 +92,39 @@ type CreateOrderRequest struct {
 
 // CreateOrderItemRequest 创建订单项请求结构体（日期用string避免解析问题）
 type CreateOrderItemRequest struct {
-	DeliveryPlan       []models.DeliveryBatchInput `json:"delivery_plan"`
-	ID                 *int64                      `json:"id"`
-	OrderID            *int64                      `json:"order_id"`
-	PartName           string                      `json:"part_name"`
-	PartNumber         *string                     `json:"part_number"`
-	ProductionQuantity int                         `json:"production_quantity"`
-	Quantity           int                         `json:"quantity"`
-	ScrapQuantity      int                         `json:"scrap_quantity"`
-	UnitPrice          *float64                    `json:"unit_price"`
-	TotalPrice         float64                     `json:"total_price"`
-	Status             models.OrderStatus          `json:"status"`
-	DrawingData        *string                     `json:"drawing_data"`
-	Notes              *string                     `json:"notes"`
-	StartDate          string                      `json:"start_date"`
-	DueDate            string                      `json:"due_date"`
-	DeliveredQty       int                         `json:"delivered_quantity"`
-	ToolCost           *float64                    `json:"tool_cost"`
-	FixtureCost        *float64                    `json:"fixture_cost"`
-	MaterialCost       *float64                    `json:"material_cost"`
-	OtherCost          *float64                    `json:"other_cost"`
-	SupplyMode         string                      `json:"supply_mode"`
-	Currency           string                      `json:"currency"`
-	TaxInclusive       *bool                       `json:"tax_inclusive"`
-	ItemNotes          *string                     `json:"item_notes"`
-	CompletionDate     string                      `json:"completion_date"`
-	Processes          []ProcessRequest            `json:"processes"`
+	DeliveryPlan        []models.DeliveryBatchInput `json:"delivery_plan"`
+	ID                  *int64                      `json:"id"`
+	OrderID             *int64                      `json:"order_id"`
+	PartName            string                      `json:"part_name"`
+	PartNumber          *string                     `json:"part_number"`
+	ProductionQuantity  int                         `json:"production_quantity"`
+	Quantity            int                         `json:"quantity"`
+	ScrapQuantity       int                         `json:"scrap_quantity"`
+	UnitPrice           *float64                    `json:"unit_price"`
+	TotalPrice          float64                     `json:"total_price"`
+	Status              models.OrderStatus          `json:"status"`
+	DrawingData         *string                     `json:"drawing_data"`
+	DrawingIDs          []int64                     `json:"drawing_ids"`
+	DrawingChangeReason string                      `json:"drawing_change_reason"`
+	Notes               *string                     `json:"notes"`
+	StartDate           string                      `json:"start_date"`
+	DueDate             string                      `json:"due_date"`
+	DeliveredQty        int                         `json:"delivered_quantity"`
+	ToolCost            *float64                    `json:"tool_cost"`
+	FixtureCost         *float64                    `json:"fixture_cost"`
+	MaterialCost        *float64                    `json:"material_cost"`
+	OtherCost           *float64                    `json:"other_cost"`
+	SupplyMode          string                      `json:"supply_mode"`
+	Currency            string                      `json:"currency"`
+	TaxInclusive        *bool                       `json:"tax_inclusive"`
+	ItemNotes           *string                     `json:"item_notes"`
+	CompletionDate      string                      `json:"completion_date"`
+	Processes           []ProcessRequest            `json:"processes"`
 }
 
 // ProcessRequest 工序请求结构体
 type ProcessRequest struct {
+	CuttingSpec    *string              `json:"cutting_spec"`
 	ID             *int64               `json:"id"`
 	OrderItemID    *int64               `json:"order_item_id"`
 	Name           string               `json:"name"`
@@ -260,6 +263,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 				Name:           p.Name,
 				IsOutsourced:   p.IsOutsourced,
 				OutsourcingFee: p.OutsourcingFee,
+				CuttingSpec:    p.CuttingSpec,
 				Status:         p.Status,
 				PlannedStartAt: plannedStart,
 				PlannedEndAt:   plannedEnd,
@@ -273,32 +277,34 @@ func (h *OrderHandler) Create(c *gin.Context) {
 			orderID = *reqItem.OrderID
 		}
 		items[i] = models.OrderItem{
-			ID:                 itemID,
-			OrderID:            orderID,
-			PartName:           reqItem.PartName,
-			PartNumber:         reqItem.PartNumber,
-			ProductionQuantity: reqItem.ProductionQuantity,
-			Quantity:           reqItem.Quantity,
-			ScrapQuantity:      reqItem.ScrapQuantity,
-			UnitPrice:          floatValue(reqItem.UnitPrice),
-			TotalPrice:         reqItem.TotalPrice,
-			Status:             reqItem.Status,
-			DrawingData:        reqItem.DrawingData,
-			Notes:              reqItem.Notes,
-			StartDate:          parseDate(reqItem.StartDate),
-			DueDate:            parseDate(reqItem.DueDate),
-			DeliveredQty:       intPtr(reqItem.DeliveredQty),
-			ToolCost:           reqItem.ToolCost,
-			FixtureCost:        reqItem.FixtureCost,
-			MaterialCost:       reqItem.MaterialCost,
-			OtherCost:          reqItem.OtherCost,
-			SupplyMode:         reqItem.SupplyMode,
-			Currency:           reqItem.Currency,
-			TaxInclusive:       reqItem.TaxInclusive != nil && *reqItem.TaxInclusive,
-			ItemNotes:          reqItem.ItemNotes,
-			CompletionDate:     parseDate(reqItem.CompletionDate),
-			Processes:          processes,
-			DeliveryPlan:       reqItem.DeliveryPlan,
+			ID:                  itemID,
+			OrderID:             orderID,
+			PartName:            reqItem.PartName,
+			PartNumber:          reqItem.PartNumber,
+			ProductionQuantity:  reqItem.ProductionQuantity,
+			Quantity:            reqItem.Quantity,
+			ScrapQuantity:       reqItem.ScrapQuantity,
+			UnitPrice:           floatValue(reqItem.UnitPrice),
+			TotalPrice:          reqItem.TotalPrice,
+			Status:              reqItem.Status,
+			DrawingData:         reqItem.DrawingData,
+			DrawingIDs:          reqItem.DrawingIDs,
+			DrawingChangeReason: reqItem.DrawingChangeReason,
+			Notes:               reqItem.Notes,
+			StartDate:           parseDate(reqItem.StartDate),
+			DueDate:             parseDate(reqItem.DueDate),
+			DeliveredQty:        intPtr(reqItem.DeliveredQty),
+			ToolCost:            reqItem.ToolCost,
+			FixtureCost:         reqItem.FixtureCost,
+			MaterialCost:        reqItem.MaterialCost,
+			OtherCost:           reqItem.OtherCost,
+			SupplyMode:          reqItem.SupplyMode,
+			Currency:            reqItem.Currency,
+			TaxInclusive:        reqItem.TaxInclusive != nil && *reqItem.TaxInclusive,
+			ItemNotes:           reqItem.ItemNotes,
+			CompletionDate:      parseDate(reqItem.CompletionDate),
+			Processes:           processes,
+			DeliveryPlan:        reqItem.DeliveryPlan,
 		}
 	}
 
@@ -406,6 +412,7 @@ func (h *OrderHandler) Update(c *gin.Context) {
 				Name:           p.Name,
 				IsOutsourced:   p.IsOutsourced,
 				OutsourcingFee: p.OutsourcingFee,
+				CuttingSpec:    p.CuttingSpec,
 				Status:         p.Status,
 				PlannedStartAt: plannedStart,
 				PlannedEndAt:   plannedEnd,
@@ -419,32 +426,34 @@ func (h *OrderHandler) Update(c *gin.Context) {
 			orderID = *reqItem.OrderID
 		}
 		items[i] = models.OrderItem{
-			ID:                 itemID,
-			OrderID:            orderID,
-			PartName:           reqItem.PartName,
-			PartNumber:         reqItem.PartNumber,
-			ProductionQuantity: reqItem.ProductionQuantity,
-			Quantity:           reqItem.Quantity,
-			ScrapQuantity:      reqItem.ScrapQuantity,
-			UnitPrice:          floatValue(reqItem.UnitPrice),
-			TotalPrice:         reqItem.TotalPrice,
-			Status:             reqItem.Status,
-			DrawingData:        reqItem.DrawingData,
-			Notes:              reqItem.Notes,
-			StartDate:          parseDate(reqItem.StartDate),
-			DueDate:            parseDate(reqItem.DueDate),
-			DeliveredQty:       intPtr(reqItem.DeliveredQty),
-			ToolCost:           reqItem.ToolCost,
-			FixtureCost:        reqItem.FixtureCost,
-			MaterialCost:       reqItem.MaterialCost,
-			OtherCost:          reqItem.OtherCost,
-			SupplyMode:         reqItem.SupplyMode,
-			Currency:           reqItem.Currency,
-			TaxInclusive:       reqItem.TaxInclusive != nil && *reqItem.TaxInclusive,
-			ItemNotes:          reqItem.ItemNotes,
-			CompletionDate:     parseDate(reqItem.CompletionDate),
-			Processes:          processes,
-			DeliveryPlan:       reqItem.DeliveryPlan,
+			ID:                  itemID,
+			OrderID:             orderID,
+			PartName:            reqItem.PartName,
+			PartNumber:          reqItem.PartNumber,
+			ProductionQuantity:  reqItem.ProductionQuantity,
+			Quantity:            reqItem.Quantity,
+			ScrapQuantity:       reqItem.ScrapQuantity,
+			UnitPrice:           floatValue(reqItem.UnitPrice),
+			TotalPrice:          reqItem.TotalPrice,
+			Status:              reqItem.Status,
+			DrawingData:         reqItem.DrawingData,
+			DrawingIDs:          reqItem.DrawingIDs,
+			DrawingChangeReason: reqItem.DrawingChangeReason,
+			Notes:               reqItem.Notes,
+			StartDate:           parseDate(reqItem.StartDate),
+			DueDate:             parseDate(reqItem.DueDate),
+			DeliveredQty:        intPtr(reqItem.DeliveredQty),
+			ToolCost:            reqItem.ToolCost,
+			FixtureCost:         reqItem.FixtureCost,
+			MaterialCost:        reqItem.MaterialCost,
+			OtherCost:           reqItem.OtherCost,
+			SupplyMode:          reqItem.SupplyMode,
+			Currency:            reqItem.Currency,
+			TaxInclusive:        reqItem.TaxInclusive != nil && *reqItem.TaxInclusive,
+			ItemNotes:           reqItem.ItemNotes,
+			CompletionDate:      parseDate(reqItem.CompletionDate),
+			Processes:           processes,
+			DeliveryPlan:        reqItem.DeliveryPlan,
 		}
 	}
 

@@ -1,3 +1,4 @@
+import DrawingButton from '../features/drawings/DrawingButton';
 import DeliveryBatchEditor, { invalidDeliveryPlan } from "./DeliveryBatchEditor";
 import { formatAmount } from '../utils/money';
 import { calculateOrderAmounts } from '../utils/orderAmounts';
@@ -91,7 +92,7 @@ const OrderModal: React.FC<OrderModalProps> = (p) => {
   <div className="flex justify-between items-center"><div><h4 className="font-semibold">零件与生产</h4><p className="text-xs text-slate-400 mt-1">投产可多于订单，超出合格件作为备用件、不计产值</p></div><button type="button" onClick={add} className="erp-btn erp-primary"><Plus size={15}/>添加零件</button></div>
   {!newOrder.id && <p className="erp-order-create-hint text-xs text-slate-500 bg-blue-50 rounded-xl">新建时填写订单数量、投产数量与客户交期；报废、已交货数量和实际完工日期在后续生产、完工与交货时记录。</p>}
   {!items.length && <button type="button" onClick={add} className="erp-card w-full py-10 text-sm text-blue-600 border-dashed">＋ 添加第一个零件</button>}
-  {items.map((item, index) => <section key={item.id || index} className="erp-card erp-order-part-card"><div className="flex justify-between items-center"><span className="text-sm font-semibold text-slate-600">零件 {index + 1} {item.part_name && `· ${item.part_name}`}</span><div className="flex gap-2 items-center"><StatusBadge status={item.status}/><button type="button" aria-label={`删除零件${index + 1}`} className="erp-btn text-rose-500 py-1 min-h-8" onClick={() => setNewOrder({ ...newOrder, items: items.filter((_, n) => n !== index) })}><Trash2 size={14}/></button></div></div>
+  {items.map((item, index) => <section key={item.id || index} className="erp-card erp-order-part-card"><div className="flex justify-between items-center"><span className="text-sm font-semibold text-slate-600">零件 {index + 1} {item.part_name && `· ${item.part_name}`}</span><div className="flex gap-2 items-center"><StatusBadge status={item.status}/><DrawingButton itemId={item.id} partName={item.part_name} partNumber={item.part_number} customerId={newOrder.customer_id} count={item.drawing_count || (item.has_drawing ? 1 : 0)} drafts={item.drawing_drafts} disabled={isSaving} onDraftChange={drawing_drafts=>itemUpdate(index,{drawing_drafts,drawing_ids:drawing_drafts.map(d=>d.id)})}/><button type="button" aria-label={`删除零件${index + 1}`} className="erp-btn text-rose-500 py-1 min-h-8" onClick={() => setNewOrder({ ...newOrder, items: items.filter((_, n) => n !== index) })}><Trash2 size={14}/></button></div></div>
     <div className={`erp-order-form-fields erp-order-item-fields ${!hidePriceFields ? 'has-prices' : ''} ${!hideCostFields ? 'has-material' : ''}`}>
       <label className="erp-label erp-order-item-name">零件名称 *
         <input required className="erp-input" value={item.part_name || ''} onChange={e => itemUpdate(index, { part_name: e.target.value })}/>

@@ -13,6 +13,7 @@ export interface Customer {
     created_at?: string;
 }
 export interface OrderProcess {
+    cutting_spec?: string | null;
     deleted_at?: string | null;
     id?: number;
     corp_id?: number;
@@ -48,6 +49,10 @@ export interface OrderItem {
     unit_price: number;
     total_price: number;
     status: 'pending' | 'processing' | 'completed' | 'delivered';
+    drawing_count?: number;
+    drawing_ids?: number[];
+    drawing_drafts?: import("./features/drawings/api").PartDrawing[];
+    drawing_change_reason?: string;
     has_drawing?: boolean;
     drawing_data?: string;
     notes?: string;

@@ -1,10 +1,11 @@
+import DrawingButton from '../features/drawings/DrawingButton';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { OrderProcess } from '../types';
 import { processDate } from '../utils/processDates';
 import { GANTT_DAY as DAY, ganttDay, beijingDayStart as dayStart, processScheduleRisk, lastProcessDeliveryRisk, timelineExtent, GanttDelivery } from '../utils/ganttSchedule';
 
-export interface GanttPart { batches?: import("../types/productionFlow").DeliveryBatch[]; batchLabel?: string; itemId: number; partName: string; partNumber?: string; orderNumber?: string; startDate?: string | null; dueDate?: string | null; quantity?: number; delivery?: GanttDelivery; }
+export interface GanttPart { batches?: import("../types/productionFlow").DeliveryBatch[]; batchLabel?: string; itemId: number; drawingCount?: number; partName: string; partNumber?: string; orderNumber?: string; customerName?: string; startDate?: string | null; dueDate?: string | null; quantity?: number; delivery?: GanttDelivery; }
 export interface ProcessGanttRow extends GanttPart { process: OrderProcess; }
 interface PartGroup extends GanttPart { rows: ProcessGanttRow[]; }
 export const nodeTime = ganttDay;
@@ -104,9 +105,9 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
     const risk = processScheduleRisk(p);
     const dates = `计划：${displayNode(p.planned_start_at)} → ${displayNode(p.planned_end_at)}；实际：${displayNode(p.actual_start_at)} → ${displayNode(p.actual_end_at)}${risk ? `；${risk}` : ''}`;
     return <div key={`${row.itemId}-${p.id ?? index}`} className={`erp-gantt-row ${risk && risk !== '实际日期待补录' ? 'has-risk' : ''}`}>
-      <button type="button" title={dates} className="erp-gantt-label erp-gantt-process-label" onClick={() => onSelect?.(row)} aria-label={`工序时间${row.partName}的${p.name}`}>
+      <button type="button" title={p.cutting_spec ? dates+"；下料尺寸规格："+p.cutting_spec : dates} className="erp-gantt-label erp-gantt-process-label" onClick={() => onSelect?.(row)} aria-label={`工序时间${row.partName}的${p.name}`}>
         <span className="erp-gantt-process-index">{String(index + 1).padStart(2, '0')}</span>
-        <span className="erp-gantt-process-info"><span className="erp-gantt-process-title"><strong>{p.name}</strong>{p.is_outsourced && <span className="text-violet-600">外</span>}<span className={`erp-gantt-state erp-gantt-state-${p.status}`}>{statusName(p.status)}</span></span><span className="erp-gantt-process-dates">{p.planned_start_at || p.planned_end_at ? `${shortNode(p.planned_start_at)} → ${shortNode(p.planned_end_at)}` : '计划未排期'}</span></span>
+        <span className="erp-gantt-process-info"><span className="erp-gantt-process-title"><strong title={p.cutting_spec || undefined}>{p.name}{p.cutting_spec ? " · "+p.cutting_spec : ""}</strong>{p.is_outsourced && <span className="text-violet-600">外</span>}<span className={`erp-gantt-state erp-gantt-state-${p.status}`}>{statusName(p.status)}</span></span><span className="erp-gantt-process-dates">{p.planned_start_at || p.planned_end_at ? `${shortNode(p.planned_start_at)} → ${shortNode(p.planned_end_at)}` : '计划未排期'}</span></span>
       </button>
       <button type="button" title={dates} onClick={() => onSelect?.(row)} className="erp-gantt-track" style={{ width, backgroundSize: `${dayWidth * tickStep}px 100%` }} aria-label={`${row.partName}的${p.name}时间条`}>
         {Number.isFinite(due) && due + DAY >= start && due + DAY < end && <span title={`客户交期：${displayNode(row.dueDate)}（当天结束）`} className="erp-gantt-due-line" style={{ left: `${(due + DAY - start) / (visibleDays * DAY) * 100}%` }} />}
@@ -169,7 +170,7 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
               <span className="min-w-0">
                 <strong className="erp-gantt-part-name">{group.partName}</strong>
                 <span className="erp-gantt-part-summary">
-                  {group.orderNumber && <span className="erp-gantt-order-number">{group.orderNumber} · </span>}工序 {completed}/{group.rows.length}
+                  {group.orderNumber && <span className="erp-gantt-order-number">{group.orderNumber} · </span>}{group.customerName?.trim() && <span className="erp-gantt-customer-name" title={`客户：${group.customerName}`} >{group.customerName} · </span>}工序 {completed}/{group.rows.length}
                   {missing > 0 && <span className="ml-2 text-amber-700">{missing} 道未排期</span>}
                 </span>
                 <span className="erp-gantt-part-due">
@@ -179,7 +180,7 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
                 </span>
               </span>
             </button>
-            <div className="erp-gantt-group-actions">{onEditRoute && <button type="button" className="erp-gantt-view-part" aria-label={`增删工序${group.partName} · ${group.orderNumber || ''}`} onClick={()=>onEditRoute(group)}>增删工序</button>}<button type="button" className="erp-gantt-view-part" aria-label={`查看${group.partName} · ${group.orderNumber || ''}的全程`} onClick={() => viewPart(group)}>查看全程</button></div>
+            <div className="erp-gantt-group-actions">{group.drawingCount !== undefined && <DrawingButton compact itemId={group.itemId} partName={group.partName} partNumber={group.partNumber} count={group.drawingCount}/>}{onEditRoute && <button type="button" className="erp-gantt-view-part" aria-label={`增删工序${group.partName} · ${group.orderNumber || ''}`} onClick={()=>onEditRoute(group)}>增删工序</button>}<button type="button" className="erp-gantt-view-part" aria-label={`查看${group.partName} · ${group.orderNumber || ''}的全程`} onClick={() => viewPart(group)}>查看全程</button></div>
           </div>
           <div id={contentId} hidden={!expanded}>{expanded && <>{group.rows.map(renderProcess)}{group.batches?.length ? group.batches.map(b=><React.Fragment key={b.id}>{renderDelivery({...group,batchLabel:`送货 · ${b.batch_no}`,dueDate:b.due_date,quantity:b.quantity,delivery:{last_date:b.last_delivery_date || "",delivered_quantity:b.delivered_quantity,dated_quantity:b.delivered_quantity,undated_quantity:0,batches:1}})}</React.Fragment>) : renderDelivery(group)}</>}</div>
         </div>;

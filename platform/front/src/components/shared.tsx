@@ -1,3 +1,4 @@
+import { fetchReadRequest } from '../services/readRequestPool';
 import React from 'react';
 import { Order } from '../types';
 // Process options and colors
@@ -115,18 +116,16 @@ export const formatDateForInput = (date: string | null | undefined): string => {
 // Helper for authorized fetch
 export const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
     const token = localStorage.getItem('auth_token');
-    const headers: HeadersInit = {
-        ...options.headers,
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    };
-    const response = await fetch(url, { ...options, headers });
+    const headers = new Headers(options.headers);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const response = await fetchReadRequest(url, { ...options, headers });
     // 处理token失效
     if (response.status === 401) {
         const data = await response.clone().json().catch(() => ({}));
         // 错误码 4003 或 4004 表示token无效/过期
         if (data.code === 4003 || data.code === 4004) {
             localStorage.removeItem('auth_token');
-            window.location.href = '/';
+            window.location.href = '/platform/';
         }
     }
     return response;

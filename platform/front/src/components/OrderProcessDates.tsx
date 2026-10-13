@@ -1,4 +1,5 @@
 import type { OrderProcess } from '../types';
+import CuttingSpecification, { isCuttingProcess } from './CuttingSpecification';
 import { processDate } from '../utils/processDates';
 
 export function invalidOrderProcessDates(processes: OrderProcess[]): boolean {
@@ -28,6 +29,7 @@ export default function OrderProcessDates({ processes, itemIndex, disabled, onUp
         <div className="text-sm font-semibold pb-2">{index + 1}. {p.name}{p.is_outsourced && <span className="ml-2 text-xs text-violet-600">外协</span>}</div>
         <label className="erp-label">计划开始日期<input type="date" className="erp-input" disabled={disabled} value={processDate(p.planned_start_at)} aria-label={`零件${itemIndex + 1}工序${index + 1}${p.name}计划开始日期`} onChange={e => update(index, 'planned_start_at', e.target.value)}/></label>
         <label className="erp-label">计划结束日期<input type="date" className="erp-input" disabled={disabled} value={processDate(p.planned_end_at)} min={processDate(p.planned_start_at) || undefined} aria-label={`零件${itemIndex + 1}工序${index + 1}${p.name}计划结束日期`} onChange={e => update(index, 'planned_end_at', e.target.value)}/></label>
+      {isCuttingProcess(p.name) && <CuttingSpecification value={p.cutting_spec} disabled={disabled} label={"零件"+(itemIndex+1)+"下料尺寸规格"} onChange={value=>onUpdate(processes.map((step,i)=>i===index?{...step,cutting_spec:value}:step))}/>}
       </div>)}
     </div>
   </details>;

@@ -1,12 +1,13 @@
 package database
 
 import (
-	"fmt"
 	"log"
+	"net"
 	"os"
+	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	driver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -20,36 +21,38 @@ type Config struct {
 	Port     int
 }
 
-func Connect(cfg *Config) (*gorm.DB, error) {
-	// 添加超时参数优化连接
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=Local&charset=utf8mb4&timeout=5s&readTimeout=10s&writeTimeout=10s",
-		cfg.User,
-		cfg.Password,
-		cfg.Host,
-		cfg.Port,
-		cfg.Database,
-	)
+func driverConfig(cfg *Config) *driver.Config {
+	c := driver.NewConfig()
+	c.User, c.Passwd, c.DBName = cfg.User, cfg.Password, cfg.Database
+	c.Net, c.Addr = "tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+	c.ParseTime, c.Loc = true, time.Local
+	c.Params = map[string]string{"charset": "utf8mb4"}
+	c.Timeout, c.ReadTimeout, c.WriteTimeout = 5*time.Second, 10*time.Second, 10*time.Second
+	// Driver escaping preserves bound parameters and removes prepare/close round trips.
+	c.InterpolateParams = true
+	return c
+}
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+func Connect(cfg *Config) (*gorm.DB, error) {
+	db, err := gorm.Open(mysql.Open(driverConfig(cfg).FormatDSN()), &gorm.Config{
 		SkipDefaultTransaction: true,
 		Logger: logger.New(log.New(os.Stdout, "", log.LstdFlags), logger.Config{
 			LogLevel: logger.Warn, SlowThreshold: time.Second,
 			ParameterizedQueries: true, Colorful: false,
-		}), // Do not format large drawings/templates into SQL log messages.
+		}),
 	})
 	if err != nil {
 		return nil, err
 	}
-
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, err
 	}
-
-	sqlDB.SetMaxOpenConns(20)                  // 增加最大连接数
-	sqlDB.SetMaxIdleConns(10)                  // 增加空闲连接数
-	sqlDB.SetConnMaxLifetime(30 * time.Minute) // 连接最大存活时间30分钟
-	sqlDB.SetConnMaxIdleTime(10 * time.Minute) // 空闲连接最大存活时间10分钟
-
+	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	// Windows driver cannot probe stale sockets; retire idle connections before
+	// intermediate network equipment can silently discard them.
+	sqlDB.SetConnMaxIdleTime(30 * time.Second)
 	return db, nil
 }

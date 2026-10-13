@@ -28,6 +28,7 @@ func (h *ProcessTimelineHandler) SaveRoute(c *gin.Context) {
 		AllowProcessedChanges bool   `json:"allow_processed_changes"`
 		Reason                string `json:"reason"`
 		Processes             []struct {
+			CuttingSpec  *string `json:"cutting_spec"`
 			ID           int64   `json:"id"`
 			Name         string  `json:"name"`
 			Outsourced   bool    `json:"is_outsourced"`
@@ -59,7 +60,7 @@ func (h *ProcessTimelineHandler) SaveRoute(c *gin.Context) {
 			response.BadRequest(c, response.CodeInvalidRequest, "计划开始和结束日期须一起提供")
 			return
 		}
-		p := models.OrderProcess{ID: v.ID, Name: name, IsOutsourced: v.Outsourced, Status: models.ProcessStatusPending}
+		p := models.OrderProcess{ID: v.ID, Name: name, CuttingSpec: v.CuttingSpec, IsOutsourced: v.Outsourced, Status: models.ProcessStatusPending}
 		if p.PlannedStartAt, err = parseProcessNode(v.PlannedStart, nil); err != nil {
 			response.BadRequest(c, response.CodeInvalidRequest, err.Error())
 			return

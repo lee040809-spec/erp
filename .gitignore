@@ -23,3 +23,6 @@ platform/go-server/tmp/
 /方案/
 /数据库备份/
 /cookies.txt
+
+# Private drawing originals (back up together with the database)
+platform/go-server/data/

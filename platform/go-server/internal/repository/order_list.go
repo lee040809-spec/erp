@@ -5,6 +5,7 @@ import (
 	"gorm.io/gorm"
 	"machining-erp/internal/models"
 	"machining-erp/internal/productionflow"
+	"machining-erp/pkg/database"
 	"sort"
 	"time"
 )
@@ -114,38 +115,18 @@ func (r *OrderRepository) GetWithFilters(filters OrderFilters) (OrderListResult,
 		baseQuery = baseQuery.Where("id IN (?)", subQuery)
 	}
 
-	// 2. 先计算总数
 	var total int64
-	t1 := time.Now()
-	if err := baseQuery.Session(&gorm.Session{}).Count(&total).Error; err != nil {
-		return OrderListResult{}, err
-	}
-	fmt.Printf("[OrderRepo] Count query took %v ms, total=%d\n", time.Since(t1).Milliseconds(), total)
-
-	if total == 0 {
-		return OrderListResult{Orders: []models.Order{}, Total: 0}, nil
-	}
-
-	// 3. 查询订单列表（分页+排序）
 	var orders []models.Order
-	orderQuery := baseQuery.Session(&gorm.Session{})
-
-	// 排序和分页
-	orderQuery = orderQuery.Order("start_date DESC, id DESC")
-	if filters.PageSize > 0 {
-		offset := 0
-		if filters.Page > 1 {
-			offset = (filters.Page - 1) * filters.PageSize
-		}
-		orderQuery = orderQuery.Limit(filters.PageSize).Offset(offset)
-	}
-
-	t2 := time.Now()
-	if err := orderQuery.Find(&orders).Error; err != nil {
+	offset := (filters.Page - 1) * filters.PageSize
+	err := database.ReadParallel(r.db,
+		func(db *gorm.DB) error { return baseQuery.Session(&gorm.Session{}).Count(&total).Error },
+		func(db *gorm.DB) error {
+			return baseQuery.Session(&gorm.Session{}).Order("start_date DESC, id DESC").Limit(filters.PageSize).Offset(offset).Find(&orders).Error
+		},
+	)
+	if err != nil {
 		return OrderListResult{}, err
 	}
-	fmt.Printf("[OrderRepo] Orders query took %v ms, count=%d\n", time.Since(t2).Milliseconds(), len(orders))
-
 	if len(orders) == 0 {
 		return OrderListResult{Orders: []models.Order{}, Total: total}, nil
 	}
@@ -156,86 +137,31 @@ func (r *OrderRepository) GetWithFilters(filters OrderFilters) (OrderListResult,
 		orderIDs[i] = o.ID
 	}
 
-	// 4. 查询零件信息
-	var items []models.OrderItem
-	if err := r.db.Omit("drawing_data").Where("order_id IN ? AND corp_id=?", orderIDs, filters.CorpID).Order("id DESC").Find(&items).Error; err != nil {
+	items, err := loadOrderListItems(r.db, filters.CorpID, orderIDs)
+	if err != nil {
 		return OrderListResult{}, err
 	}
-
-	type drawingFlag struct {
-		ID         int64
-		HasDrawing bool
-	}
-	var flags []drawingFlag
-	if err := r.db.Table("order_items").Select("id,COALESCE(drawing_data,'')<>'' AS has_drawing").Where("order_id IN ? AND corp_id=?", orderIDs, filters.CorpID).Scan(&flags).Error; err != nil {
-		return OrderListResult{}, err
-	}
-	drawings := map[int64]bool{}
-	for _, f := range flags {
-		drawings[f.ID] = f.HasDrawing
-	}
-	for i := range items {
-		items[i].HasDrawing = drawings[items[i].ID]
-	}
-	// 收集零件ID
 	itemIDs := make([]int64, len(items))
-	for i, it := range items {
-		itemIDs[i] = it.ID
+	for i, item := range items {
+		itemIDs[i] = item.ID
 	}
-
-	// 5. 查询工序信息
 	var processes []models.OrderProcess
-	if len(itemIDs) > 0 {
-		if err := r.db.Where("order_item_id IN ? AND corp_id=?", itemIDs, filters.CorpID).Order("sort_order ASC").Find(&processes).Error; err != nil {
-			return OrderListResult{}, err
-		}
-	}
-
-	// Confirmed quantities are physical counts; billable counts remain contracted.
-	type quantities struct {
-		ItemID    int64
-		Qualified float64
-		Billable  float64
-	}
-	var totals []quantities
-	if len(itemIDs) > 0 {
-		if err := r.db.Table("production_completions").Where("corp_id=? AND order_item_id IN ? AND status='confirmed'", filters.CorpID, itemIDs).Select("order_item_id AS item_id,SUM(qualified_quantity) AS qualified,SUM(billable_quantity) AS billable").Group("order_item_id").Scan(&totals).Error; err != nil {
-			return OrderListResult{}, err
-		}
-	}
-	quantitiesByID := map[int64]quantities{}
-	for _, q := range totals {
-		quantitiesByID[q.ItemID] = q
-	}
-	for n := range items {
-		q := quantitiesByID[items[n].ID]
-		items[n].QualifiedQuantity = q.Qualified
-		items[n].BillableQuantity = q.Billable
-		items[n].ReserveQuantity = q.Qualified - q.Billable
-		items[n].DeliveryGap = max(0, float64(items[n].Quantity)-q.Qualified)
-		if items[n].ProductionQuantity == 0 {
-			items[n].ProductionQuantity = items[n].Quantity
-		}
-	}
-	var dates []struct {
-		ItemID int64
-		Date   *time.Time
-	}
-	if len(itemIDs) > 0 {
-		if err := r.db.Table("order_business_records").Select("order_item_id AS item_id,MAX(business_date) AS date").Where("corp_id=? AND order_item_id IN ? AND kind='delivery' AND status='confirmed'", filters.CorpID, itemIDs).Group("order_item_id").Scan(&dates).Error; err != nil {
-			return OrderListResult{}, err
-		}
-	}
-	datesByID := map[int64]*time.Time{}
-	for _, row := range dates {
-		datesByID[row.ItemID] = row.Date
-	}
-	for n := range items {
-		items[n].DeliveryDate = datesByID[items[n].ID]
-	}
-	summaries, e := productionflow.Summaries(r.db, filters.CorpID, itemIDs)
-	if e != nil {
-		return OrderListResult{}, e
+	var summaries map[int64]productionflow.Summary
+	err = database.ReadParallel(r.db,
+		func(db *gorm.DB) error {
+			if len(itemIDs) == 0 {
+				return nil
+			}
+			return db.Where("order_item_id IN ? AND corp_id=?", itemIDs, filters.CorpID).Order("sort_order ASC").Find(&processes).Error
+		},
+		func(db *gorm.DB) error {
+			var e error
+			summaries, e = productionflow.Summaries(db, filters.CorpID, itemIDs)
+			return e
+		},
+	)
+	if err != nil {
+		return OrderListResult{}, err
 	}
 	for n := range items {
 		s := summaries[items[n].ID]

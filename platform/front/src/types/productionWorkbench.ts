@@ -18,4 +18,5 @@ export interface ProductionTask extends DashboardItem {
   delivery_gap: number;
   billable_quantity: number;
   has_drawing: boolean;
+  drawing_count?: number;
 }

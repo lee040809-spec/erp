@@ -1,3 +1,4 @@
+import DrawingButton from '../features/drawings/DrawingButton';
 
 import { ArrowUpRight, CalendarDays, CheckCircle2, SlidersHorizontal, UserRound } from 'lucide-react';
 import { StatusBadge } from './shared';
@@ -16,7 +17,6 @@ interface Props {
   onDetails: () => void;
   onQuantities: () => void;
   onUnblock: () => void;
-  onDrawing: () => void;
 }
 
 // Presentation only: requests, permissions and business writes belong to the workbench page.
@@ -49,6 +49,7 @@ export default function WorkbenchTaskCard(p: Props) {
       <div className="flex gap-2 flex-wrap">
         <button onClick={p.onDetails} disabled={saving} className="erp-btn erp-primary py-1 min-h-8">办理零件</button>
         <button onClick={p.onOpenOrder} aria-label={`查看订单${task.order_number}的${task.part_name}`} className="erp-btn py-1 min-h-8">订单资料<ArrowUpRight size={14}/></button>
+        <DrawingButton itemId={task.item_id} partName={task.part_name} partNumber={task.part_number} count={task.drawing_count || (task.has_drawing ? 1 : 0)}/>
       </div>
     </div>
     <div className={density === 'compact' ? 'erp-part-metrics my-2 text-xs' : 'grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-6 gap-3 my-4 text-xs'}>
@@ -66,9 +67,6 @@ export default function WorkbenchTaskCard(p: Props) {
         <span className="text-[11px] text-slate-400 mr-1">工序 {done}/{steps.length}</span>
         {steps.map(step => <span key={step.id} className={`erp-step erp-step-${step.status}`}>{step.status === 'completed' && <CheckCircle2 size={12}/>}<span>{step.name}</span>{step.is_outsourced && <span className="text-[10px] opacity-70">外协</span>}</span>)}
       </div>
-      <div className="flex items-center justify-between flex-wrap gap-3"><div className="flex gap-2 flex-wrap">
-        {task.has_drawing && <button onClick={p.onDrawing} className="erp-btn text-slate-500 py-1 min-h-8">图纸</button>}
-      </div></div>
     </div>
     {task.notes && <p className="mt-2 text-xs text-slate-400 whitespace-pre-wrap">{task.notes}</p>}
   </article>;

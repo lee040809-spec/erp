@@ -101,13 +101,13 @@ const Finance: React.FC<FinanceProps> = () => {
             <button onClick={load} disabled={loading} className="h-10 border border-zinc-200 bg-white px-3 text-sm font-medium hover:bg-zinc-100 disabled:opacity-50" title="刷新">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}/>
             </button>
-            <button onClick={exportCsv} disabled={summary.months.length === 0} className="h-10 bg-zinc-900 text-white px-4 text-sm font-medium flex items-center gap-2 hover:bg-zinc-800 disabled:opacity-40">
+            <button onClick={exportCsv} disabled={loading || !!error || summary.months.length === 0} className="h-10 bg-zinc-900 text-white px-4 text-sm font-medium flex items-center gap-2 hover:bg-zinc-800 disabled:opacity-40">
               <Download className="w-4 h-4"/>导出 CSV
             </button>
           </div>
         </div>
 
-        {error && (<div className="border border-rose-200 bg-rose-50 text-rose-700 px-4 py-3 flex items-center gap-2 text-sm">
+        {error && (<div role="alert" className="border border-rose-200 bg-rose-50 text-rose-700 px-4 py-3 flex items-center gap-2 text-sm">
             <AlertCircle className="w-4 h-4"/>{error}
           </div>)}
 
@@ -115,7 +115,7 @@ const Finance: React.FC<FinanceProps> = () => {
           {cards.map(card => (<div key={card.label} className="erp-card p-5">
               <div className={`w-10 h-10 ${card.bg} ${card.color} flex items-center justify-center mb-4`}><card.icon className="w-5 h-5"/></div>
               <p className="text-sm text-zinc-500">{card.label}</p>
-              <p className={`text-2xl font-bold mt-1 ${card.color}`}>{money(card.value)}</p>
+              <p className={`text-2xl font-bold mt-1 ${card.color}`}>{loading ? '读取中…' : error ? '未读取' : money(card.value)}</p>
             </div>))}
         </div>
 
@@ -132,7 +132,7 @@ const Finance: React.FC<FinanceProps> = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {summary.months.map((item: MonthlyFinanceSummary) => (<tr key={item.month} className="hover:bg-zinc-50">
+                {!loading && !error && summary.months.map((item: MonthlyFinanceSummary) => (<tr key={item.month} className="hover:bg-zinc-50">
                     <td className="px-4 py-3 font-semibold"><button className="text-blue-700 underline" onClick={() => { setDetailsMonth(item.month); setSelectionVersion(v => v + 1); }}>{item.month}</button></td>
                     <td className="px-4 py-3 text-right">{item.qualified_quantity}</td><td className="px-4 py-3 text-right">{item.billable_quantity}</td><td className="px-4 py-3 text-right text-violet-600">{item.reserve_quantity}</td>
                     <td className="px-4 py-3 text-right font-semibold">{money(item.output_value)}</td>
@@ -148,15 +148,15 @@ const Finance: React.FC<FinanceProps> = () => {
               </tbody>
             </ResponsiveTable>
           </div>
-          {!loading && summary.months.length === 0 && (<div className="py-16 text-center text-zinc-500">
+          {!loading && !error && summary.months.length === 0 && (<div className="py-16 text-center text-zinc-500">
               <p className="font-medium">本年度暂无已确认的合格完工批次</p>
               <p className="text-xs mt-2">历史“已完成”状态不会自动计入精确产值，需要审核后再迁移。</p>
             </div>)}
-          {loading && <div className="py-16 text-center text-zinc-400">正在读取经营数据…</div>}
+          {loading && <div role="status" className="py-16 text-center text-zinc-400">正在读取经营数据…</div>}
         </div>
-        <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">全公司未分摊生产费用：{money(summary.pending_cost_amount || '0')}（{summary.pending_cost_count || 0} 笔，跨所有年份）。未分摊费用暂不扣减完工贡献，请先在下方完成成本分摊。</div>
+        {!loading && !error && <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">全公司未分摊生产费用：{money(summary.pending_cost_amount || '0')}（{summary.pending_cost_count || 0} 笔，跨所有年份）。未分摊费用暂不扣减完工贡献，请先在下方完成成本分摊。</div>}
         <p className="rounded-xl bg-blue-50 p-4 text-sm text-blue-800">日常产值：在生产工作台确认合格数量和日期，系统自动汇总；历史数据只需补录合格数量和日期，默认使用订单单价。凭证类信息默认选填。</p>
-        <FinanceReviewPanel access={access} key={policyVersion} year={year} month={detailsMonth} selectionVersion={selectionVersion} onImported={load}/>
+        {!error && access && <FinanceReviewPanel access={access} key={policyVersion} year={year} month={detailsMonth} selectionVersion={selectionVersion} onImported={load}/>}
         {showCostModal && access?.can_manage_costs && <CostEntryModal onClose={() => setShowCostModal(false)} onSuccess={load}/>}
       </div>
     </div>);

@@ -134,54 +134,45 @@ func Summaries(db *gorm.DB, corp int64, ids []int64) (map[int64]Summary, error) 
 	for _, id := range ids {
 		result[id] = Summary{Batches: []models.DeliveryBatch{}}
 	}
-	var tracking []int64
-	if err := db.Model(&models.ProcessQuantity{}).Where("corp_id=? AND order_item_id IN ?", corp, ids).Distinct("order_item_id").Pluck("order_item_id", &tracking).Error; err != nil {
-		return nil, err
-	}
-	for _, id := range tracking {
-		s := result[id]
-		s.Tracking = true
-		result[id] = s
-	}
-	var batches []struct {
+	var rows []struct {
 		models.DeliveryBatch
-		Qualified int    `gorm:"column:qualified_quantity"`
-		Delivered int    `gorm:"column:delivered_quantity"`
-		LastDate  string `gorm:"column:last_delivery_date"`
+		SummaryItemID          int64
+		SummaryTracking        bool
+		SummaryOpenOutsourcing int
+		Qualified              int    `gorm:"column:qualified_quantity"`
+		Delivered              int    `gorm:"column:delivered_quantity"`
+		LastDate               string `gorm:"column:last_delivery_date"`
 	}
-	if err := db.Raw(`SELECT b.*,COALESCE(q.quantity,0) AS qualified_quantity,COALESCE(d.quantity,0) AS delivered_quantity,COALESCE(d.last_date,'') AS last_delivery_date FROM order_delivery_batches b
- LEFT JOIN (SELECT delivery_batch_id,corp_id,CAST(SUM(qualified_quantity) AS SIGNED) AS quantity FROM production_completions WHERE status='confirmed' GROUP BY corp_id,delivery_batch_id) q ON q.delivery_batch_id=b.id AND q.corp_id=b.corp_id
- LEFT JOIN (SELECT delivery_batch_id,corp_id,SUM(quantity) AS quantity,DATE_FORMAT(MAX(business_date),'%Y-%m-%d') AS last_date FROM order_business_records WHERE status='confirmed' AND kind='delivery' GROUP BY corp_id,delivery_batch_id) d ON d.delivery_batch_id=b.id AND d.corp_id=b.corp_id
- WHERE b.corp_id=? AND b.order_item_id IN ? ORDER BY b.due_date,b.id`, corp, ids).Scan(&batches).Error; err != nil {
+	if err := db.Raw(`SELECT b.*,i.id AS summary_item_id,
+ EXISTS(SELECT 1 FROM process_quantity_totals pt WHERE pt.corp_id=i.corp_id AND pt.order_item_id=i.id) AS summary_tracking,
+ COALESCE(outs.quantity,0) AS summary_open_outsourcing,
+ COALESCE(q.quantity,0) AS qualified_quantity,COALESCE(d.quantity,0) AS delivered_quantity,COALESCE(d.last_date,'') AS last_delivery_date
+ FROM order_items i
+ LEFT JOIN order_delivery_batches b ON b.corp_id=i.corp_id AND b.order_item_id=i.id
+ LEFT JOIN (SELECT delivery_batch_id,CAST(SUM(qualified_quantity) AS SIGNED) AS quantity FROM production_completions WHERE corp_id=? AND status='confirmed' GROUP BY delivery_batch_id) q ON q.delivery_batch_id=b.id
+ LEFT JOIN (SELECT delivery_batch_id,SUM(quantity) AS quantity,DATE_FORMAT(MAX(business_date),'%Y-%m-%d') AS last_date FROM order_business_records WHERE corp_id=? AND status='confirmed' AND kind='delivery' GROUP BY delivery_batch_id) d ON d.delivery_batch_id=b.id
+ LEFT JOIN (SELECT order_item_id,SUM(open_quantity+rework_waiting_quantity+rework_out_quantity) AS quantity FROM outsourcing_dispatches WHERE corp_id=? GROUP BY order_item_id) outs ON outs.order_item_id=i.id
+ WHERE i.corp_id=? AND i.id IN ? ORDER BY b.due_date,b.id`, corp, corp, corp, corp, ids).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	for _, r := range batches {
-		b := r.DeliveryBatch
-		b.QualifiedQuantity = r.Qualified
-		b.DeliveredQuantity = r.Delivered
-		b.LastDeliveryDate = r.LastDate
-		s := result[b.OrderItemID]
-		s.Batches = append(s.Batches, b)
-		if b.DeliveredQuantity < b.Quantity && (s.NextDueDate == "" || b.DueDate.Format("2006-01-02") < s.NextDueDate) {
-			s.NextDueDate = b.DueDate.Format("2006-01-02")
+	for _, r := range rows {
+		s := result[r.SummaryItemID]
+		s.Tracking = r.SummaryTracking
+		s.OpenOutsourcing = r.SummaryOpenOutsourcing
+		if r.ID != 0 {
+			b := r.DeliveryBatch
+			b.QualifiedQuantity = r.Qualified
+			b.DeliveredQuantity = r.Delivered
+			b.LastDeliveryDate = r.LastDate
+			s.Batches = append(s.Batches, b)
+			if b.DeliveredQuantity < b.Quantity && (s.NextDueDate == "" || b.DueDate.Format("2006-01-02") < s.NextDueDate) {
+				s.NextDueDate = b.DueDate.Format("2006-01-02")
+			}
 		}
-		result[b.OrderItemID] = s
-	}
-	var outs []struct {
-		OrderItemID int64
-		Quantity    int
-	}
-	if err := db.Model(&models.OutsourcingDispatch{}).Select("order_item_id,SUM(open_quantity+rework_waiting_quantity+rework_out_quantity) AS quantity").Where("corp_id=? AND order_item_id IN ?", corp, ids).Group("order_item_id").Find(&outs).Error; err != nil {
-		return nil, err
-	}
-	for _, o := range outs {
-		s := result[o.OrderItemID]
-		s.OpenOutsourcing = o.Quantity
-		result[o.OrderItemID] = s
+		result[r.SummaryItemID] = s
 	}
 	return result, nil
 }
-
 func ValidateDelivery(tx *gorm.DB, corp, item int64, batch *int64, quantity int, date string) error {
 	b, err := BatchScope(tx, corp, item, batch)
 	if err != nil {

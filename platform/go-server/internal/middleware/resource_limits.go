@@ -24,12 +24,16 @@ func ResourceLimits() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "服务繁忙，请稍后重试"})
 			return
 		}
-		if c.Request.ContentLength > RequestBodyLimit {
+		bodyLimit := RequestBodyLimit
+		if c.Request.Method == http.MethodPost && c.Request.URL.Path == "/api/platform/drawings" {
+			bodyLimit += 1 << 20 // Multipart headers must not reduce the advertised 20MB file limit.
+		}
+		if c.Request.ContentLength > bodyLimit {
 			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"error": "请求内容超过20MB，请减少附件或分批提交"})
 			return
 		}
 		if c.Request.Body != nil {
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, RequestBodyLimit)
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, bodyLimit)
 		}
 		if c.Request.Method == http.MethodPost && strings.Contains(c.Request.URL.Path, "excel") {
 			select {

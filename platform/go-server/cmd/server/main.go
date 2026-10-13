@@ -83,6 +83,7 @@ func main() {
 		log.Fatalf("Failed to get underlying sql.DB: %v", err)
 	}
 	defer sqlDB.Close()
+	go database.KeepReadConnectionsWarm(ctx, sqlDB, 3)
 
 	// 自动迁移新表
 	if err := db.AutoMigrate(
@@ -133,6 +134,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	customerHandler := handlers.NewCustomerHandler(customerRepo, db)
 	orderHandler := handlers.NewOrderHandler(orderRepo, orderItemRepo, processRepo, orderNumSvc, db)
+	drawingHandler := handlers.NewPartDrawingHandler(db, os.Getenv("DRAWING_STORAGE_DIR"))
 	itemHandler := handlers.NewOrderItemHandler(orderItemRepo, orderRepo, processRepo, db)
 	processHandler := handlers.NewProcessHandler(processRepo, orderItemRepo, orderRepo, db)
 	materialHandler := handlers.NewMaterialHandler(materialRepo, db)
@@ -198,6 +200,12 @@ func main() {
 	api.Use(middleware.AuthMiddleware(authService))
 	api.GET("/system/runtime", handlers.RuntimeMetrics(db))
 	api.GET("/order-items/:itemId/drawing", orderHandler.Drawing)
+	api.GET("/order-items/:itemId/drawings", drawingHandler.List)
+	api.POST("/drawings", drawingHandler.Upload)
+	api.GET("/drawings/search", drawingHandler.Search)
+	api.POST("/drawings/reference", drawingHandler.Reference)
+	api.PATCH("/drawings/:drawingId", drawingHandler.State)
+	api.GET("/drawings/:drawingId/file", drawingHandler.File)
 	{
 		// 当前用户信息
 		api.GET("/me", authHandler.GetCurrentUser)

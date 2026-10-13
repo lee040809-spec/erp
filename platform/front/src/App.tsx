@@ -154,8 +154,7 @@ export default function App() {
         setIsAuthenticated(true);
         setAuthUser(user);
         localStorage.setItem('auth_user', JSON.stringify(user));
-        fetchDashboardData();
-        fetchCustomersData(); // 登录时加载客户数据
+        // Active pages load their own data after authentication.
     };
     const handleLogout = async () => {
         const token = localStorage.getItem('auth_token');
@@ -493,18 +492,8 @@ export default function App() {
         // 先清空当前面板数据，避免显示旧数据
         switch (activeTab) {
             case 'dashboard':
-                setDashboardItems([]);
-                setDashboardStats({ pending_count: 0, processing_count: 0, completed_count: 0, overdue_count: 0, warning_count: 0, near_due_count: 0 });
-                setDashboardPage(1);
-                fetchDashboardData();
-                if (customers.length === 0)
-                    fetchCustomersData();
-                break;
             case 'production_dashboard':
-                setDashboardItems([]);
-                setDashboardStats({ pending_count: 0, processing_count: 0, completed_count: 0, overdue_count: 0, warning_count: 0, near_due_count: 0 });
-                setDashboardPage(1);
-                fetchDashboardData();
+                // ProductionWorkbench owns its query; legacy dashboard data is unused.
                 if (customers.length === 0)
                     fetchCustomersData();
                 break;
@@ -602,12 +591,6 @@ export default function App() {
                 break;
         }
     }, [activeTab, isAuthenticated]);
-    // 监听工作看板分页变化
-    useEffect(() => {
-        if (!isAuthenticated || activeTab !== 'dashboard')
-            return;
-        fetchDashboardData();
-    }, [dashboardPage, dashboardPageSize]);
     // Order pages own filtered pagination; avoid a second unfiltered request overwriting it.
     const fetchData = async () => {
         setIsLoading(true);

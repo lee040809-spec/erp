@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"log"
+	"machining-erp/internal/drawings"
 	"machining-erp/internal/middleware"
 	"machining-erp/internal/models"
 	"machining-erp/internal/productionflow"
 	"machining-erp/internal/repository"
+	"machining-erp/pkg/database"
 	"machining-erp/pkg/response"
 	"strings"
 	"time"
@@ -103,11 +106,16 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		}
 	}
 	var summary counts
-	if err := h.db.Raw("SELECT COUNT(DISTINCT o.id) AS orders,COUNT(*) AS items,COALESCE(SUM(i.quantity),0) AS pieces"+base, args...).Scan(&summary).Error; err != nil {
-		log.Printf("workbench summary error: %v", err)
-		response.InternalError(c, response.CodeInternal, "读取工作台数量失败")
-		return
+	if strings.TrimSpace(c.Query("search")) == "" {
+		summary = metrics[view]
+	} else {
+		if err := h.db.Raw("SELECT COUNT(DISTINCT o.id) AS orders,COUNT(*) AS items,COALESCE(SUM(i.quantity),0) AS pieces"+base, args...).Scan(&summary).Error; err != nil {
+			log.Printf("workbench summary error: %v", err)
+			response.InternalError(c, response.CodeInternal, "读取工作台数量失败")
+			return
+		}
 	}
+
 	type row struct {
 		Flow               productionflow.Summary     `gorm:"-" json:"flow"`
 		ItemID             int64                      `json:"item_id"`
@@ -135,13 +143,15 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		EstimatedHours     string                     `json:"estimated_hours"`
 		BlockedReason      string                     `json:"blocked_reason"`
 		Notes              string                     `json:"notes"`
+		DrawingCount       int                        `json:"drawing_count"`
 		HasDrawing         bool                       `json:"has_drawing"`
 		Delivery           repository.DeliverySummary `gorm:"-" json:"delivery"`
 		Processes          []models.OrderProcess      `gorm:"-" json:"processes"`
 	}
 	rows := []row{}
 	selectSQL := `SELECT i.id AS item_id,o.id AS order_id,o.order_number,COALESCE(o.customer_short_name,o.customer_name,'') AS customer_name,i.part_name,COALESCE(i.part_number,'') AS part_number,o.priority,i.status,i.quantity,COALESCE(NULLIF(i.production_quantity,0),i.quantity) AS production_quantity, COALESCE(q.billable_quantity,0) AS billable_quantity, COALESCE(q.qualified_quantity,0)-COALESCE(q.billable_quantity,0) AS reserve_quantity, GREATEST(i.quantity-COALESCE(q.qualified_quantity,0),0) AS delivery_gap,COALESCE(i.scrap_quantity,0) AS scrap_quantity,COALESCE(q.qualified_quantity,0) AS qualified_quantity,GREATEST(COALESCE(NULLIF(i.production_quantity,0),i.quantity)-COALESCE(i.scrap_quantity,0)-COALESCE(q.qualified_quantity,0),0) AS remaining_quantity,COALESCE(DATE_FORMAT(i.due_date,'%Y-%m-%d'),'') AS due_date,
- COALESCE(DATE_FORMAT(COALESCE(i.start_date,o.start_date),'%Y-%m-%d'),'') AS start_date,COALESCE(pp.assignee,'') AS assignee,COALESCE(pp.equipment,'') AS equipment,COALESCE(DATE_FORMAT(pp.planned_start,'%Y-%m-%d'),'') AS planned_start,COALESCE(DATE_FORMAT(pp.planned_end,'%Y-%m-%d'),'') AS planned_end,COALESCE(CAST(pp.estimated_hours AS CHAR),'0.00') AS estimated_hours,COALESCE(pp.blocked_reason,'') AS blocked_reason,COALESCE(pp.notes,'') AS notes,COALESCE(i.drawing_data,'')<>'' AS has_drawing`
+ COALESCE(DATE_FORMAT(COALESCE(i.start_date,o.start_date),'%Y-%m-%d'),'') AS start_date,COALESCE(pp.assignee,'') AS assignee,COALESCE(pp.equipment,'') AS equipment,COALESCE(DATE_FORMAT(pp.planned_start,'%Y-%m-%d'),'') AS planned_start,COALESCE(DATE_FORMAT(pp.planned_end,'%Y-%m-%d'),'') AS planned_end,COALESCE(CAST(pp.estimated_hours AS CHAR),'0.00') AS estimated_hours,COALESCE(pp.blocked_reason,'') AS blocked_reason,COALESCE(pp.notes,'') AS notes,0 AS has_drawing`
+	selectSQL += "," + drawings.CountSQL("i") + " AS drawing_count"
 	queryArgs := append(append([]interface{}{}, args...), size, offset)
 	err := h.db.Raw(selectSQL+base+` ORDER BY COALESCE(i.start_date,o.start_date) DESC,o.id DESC,i.id DESC LIMIT ? OFFSET ?`, queryArgs...).Scan(&rows).Error
 	if err != nil {
@@ -154,21 +164,25 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		ids = append(ids, r.ItemID)
 	}
 	processes := []models.OrderProcess{}
-	if len(ids) > 0 {
-		err = h.db.Select("id,order_item_id,corp_id,name,is_outsourced,status,sort_order,planned_start_at,planned_end_at,actual_start_at,actual_end_at").Where("corp_id=? AND order_item_id IN ?", corp, ids).Order("sort_order,id").Find(&processes).Error
-		if err != nil {
-			response.InternalError(c, response.CodeInternal, "读取工序失败")
-			return
-		}
-	}
-	deliveries, err := repository.LoadDeliverySummaries(h.db, corp, ids)
+	var deliveries map[int64]repository.DeliverySummary
+	var flows map[int64]productionflow.Summary
+	err = database.ReadParallel(h.db.WithContext(c.Request.Context()),
+		func(db *gorm.DB) error {
+			if len(ids) == 0 {
+				return nil
+			}
+			return db.Select("id,order_item_id,corp_id,name,is_outsourced,status,sort_order,planned_start_at,planned_end_at,actual_start_at,actual_end_at").Where("corp_id=? AND order_item_id IN ?", corp, ids).Order("sort_order,id").Find(&processes).Error
+		},
+		func(db *gorm.DB) error {
+			var e error
+			deliveries, e = repository.LoadDeliverySummaries(db, corp, ids)
+			return e
+		},
+		func(db *gorm.DB) error { var e error; flows, e = productionflow.Summaries(db, corp, ids); return e },
+	)
 	if err != nil {
-		response.InternalError(c, response.CodeInternal, "读取送货节点失败")
-		return
-	}
-	flows, e := productionflow.Summaries(h.db, corp, ids)
-	if e != nil {
-		response.InternalError(c, response.CodeInternal, "读取分批生产失败")
+		log.Printf("workbench details error: %v", err)
+		response.InternalError(c, response.CodeInternal, "读取工序、送货与分批信息失败")
 		return
 	}
 	processesByItem := make(map[int64][]models.OrderProcess, len(ids))
@@ -176,6 +190,7 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		processesByItem[process.OrderItemID] = append(processesByItem[process.OrderItemID], process)
 	}
 	for n := range rows {
+		rows[n].HasDrawing = rows[n].DrawingCount > 0
 		rows[n].Flow = flows[rows[n].ItemID]
 		rows[n].Delivery = deliveries[rows[n].ItemID]
 		rows[n].Processes = []models.OrderProcess{}

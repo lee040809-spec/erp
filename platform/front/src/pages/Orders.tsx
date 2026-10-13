@@ -1,4 +1,5 @@
 import React from 'react';
+import { useOrderQuery } from '../hooks/useOrderQuery';
 import { ClipboardList } from 'lucide-react';
 import { Order } from '../types';
 import OrderMonitorPanel from '../components/OrderMonitorPanel';
@@ -35,7 +36,7 @@ interface OrdersProps {
 }
 
 const Orders: React.FC<OrdersProps> = ({ orders, orderFilters, setOrderFilters, appliedOrderFilters, setAppliedOrderFilters, currentPage, setCurrentPage, pageSize, setPageSize, orderTotal, resetAndOpenModal, editOrder, deleteOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false, navigationTarget, onReturnToWorkbench }) => {
-  const [isSearching, setIsSearching] = React.useState(false);
+  const { isSearching, queryError, run, retry } = useOrderQuery();
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [deletingOrder, setDeletingOrder] = React.useState<Order | null>(null);
 
@@ -43,26 +44,12 @@ const Orders: React.FC<OrdersProps> = ({ orders, orderFilters, setOrderFilters, 
   const handleSearch = async (nextFilters = orderFilters) => {
     setCurrentPage(1);
     setAppliedOrderFilters?.(nextFilters);
-    setIsSearching(true);
-    try {
-      await fetchOrdersWithFilters(nextFilters, 1, pageSize);
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-    } finally {
-      setIsSearching(false);
-    }
+    await run(() => fetchOrdersWithFilters(nextFilters, 1, pageSize));
   };
 
   // 分页切换时带筛选条件查询
   const handlePageChangeWithFilters = async (newPage: number, newPageSize?: number) => {
-    setIsSearching(true);
-    try {
-      await fetchOrdersWithFilters(appliedOrderFilters || orderFilters, newPage, newPageSize || pageSize);
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-    } finally {
-      setIsSearching(false);
-    }
+    await run(() => fetchOrdersWithFilters(appliedOrderFilters || orderFilters, newPage, newPageSize || pageSize));
   };
 
   // Handle delete click
@@ -76,6 +63,8 @@ const Orders: React.FC<OrdersProps> = ({ orders, orderFilters, setOrderFilters, 
       {/* Shared Panel */}
       <OrderMonitorPanel
         title="订单管理"
+        queryError={queryError}
+        onRetryQuery={retry}
         icon={ClipboardList}
         orders={orders}
         filters={orderFilters}

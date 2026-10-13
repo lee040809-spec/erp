@@ -1,4 +1,5 @@
 import React from 'react';
+import { useOrderQuery } from '../hooks/useOrderQuery';
 import { AlertTriangle } from 'lucide-react';
 import { Order } from '../types';
 import OrderMonitorPanel from '../components/OrderMonitorPanel';
@@ -23,16 +24,11 @@ interface WarningProps {
 }
 
 const Warning: React.FC<WarningProps> = ({ orders, orderTotal, warningFilters, setWarningFilters, warningPage, setWarningPage, warningPageSize, setWarningPageSize, editOrder, setShowDrawingModal, handleProcessClick, getOrderMaxDueDate, fetchOrdersWithFilters, hideCostFields = false }) => {
-  const [isSearching, setIsSearching] = React.useState(false);
+  const { isSearching, queryError, run, retry } = useOrderQuery();
 
   const applied = React.useRef(warningFilters);
   const handlePageChange = async (nextPage: number, nextSize = warningPageSize, nextFilters = applied.current) => {
-    setIsSearching(true);
-    try {
-      await fetchOrdersWithFilters(nextFilters, nextPage, nextSize, 'warning');
-    } finally {
-      setIsSearching(false);
-    }
+    await run(() => fetchOrdersWithFilters(nextFilters, nextPage, nextSize, 'warning'));
   };
 
   const handleSearch = (nextFilters = warningFilters) => {
@@ -68,6 +64,8 @@ const Warning: React.FC<WarningProps> = ({ orders, orderTotal, warningFilters, s
       onSearch={() => handleSearch()}
       onReset={handleSearch}
       onPageChangeWithFilters={handlePageChange}
+      queryError={queryError}
+      onRetryQuery={retry}
       isSearching={isSearching}
     />
   );

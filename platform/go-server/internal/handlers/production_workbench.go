@@ -18,24 +18,36 @@ type ProductionWorkbenchHandler struct{ db *gorm.DB }
 func NewProductionWorkbenchHandler(db *gorm.DB) *ProductionWorkbenchHandler {
 	return &ProductionWorkbenchHandler{db: db}
 }
-func (h *ProductionWorkbenchHandler) canManage(c *gin.Context) bool {
+
+type workbenchAccess struct {
+	Manage    int64
+	Dashboard int64
+}
+
+func (h *ProductionWorkbenchHandler) readAccess(c *gin.Context) (workbenchAccess, error) {
 	if middleware.GetRoleType(c) == "admin" {
-		return true
+		return workbenchAccess{1, 1}, nil
 	}
-	var n int64
-	err := h.db.Table("users u").Joins("JOIN permissions p ON p.role_id=u.role_id AND p.corp_id=u.corp_id").Joins("JOIN resources r ON r.id=p.resource_id").Where("u.id=? AND u.corp_id=? AND r.resource_key IN ?", middleware.GetUserID(c), middleware.GetCorpID(c), []string{"production_dashboard", "production_orders"}).Count(&n).Error
-	return err == nil && n > 0
+	if value, ok := c.Get("workbenchReadAccess"); ok {
+		return value.(workbenchAccess), nil
+	}
+	var access workbenchAccess
+	err := h.db.WithContext(c.Request.Context()).Table("users u").Joins("JOIN permissions p ON p.role_id=u.role_id AND p.corp_id=u.corp_id").Joins("JOIN resources r ON r.id=p.resource_id").
+		Select("COALESCE(MAX(CASE WHEN r.resource_key IN ('production_dashboard','production_orders') THEN 1 ELSE 0 END),0) AS manage,COALESCE(MAX(CASE WHEN r.resource_key='dashboard' THEN 1 ELSE 0 END),0) AS dashboard").
+		Where("u.id=? AND u.corp_id=?", middleware.GetUserID(c), middleware.GetCorpID(c)).Scan(&access).Error
+	if err == nil {
+		c.Set("workbenchReadAccess", access)
+	}
+	return access, err
+}
+func (h *ProductionWorkbenchHandler) canManage(c *gin.Context) bool {
+	access, err := h.readAccess(c)
+	return err == nil && access.Manage > 0
 }
 func (h *ProductionWorkbenchHandler) allowed(c *gin.Context, write bool) bool {
-	if h.canManage(c) {
+	access, err := h.readAccess(c)
+	if err == nil && (access.Manage > 0 || !write && access.Dashboard > 0) {
 		return true
-	}
-	if !write {
-		var n int64
-		err := h.db.Table("users u").Joins("JOIN permissions p ON p.role_id=u.role_id AND p.corp_id=u.corp_id").Joins("JOIN resources r ON r.id=p.resource_id").Where("u.id=? AND u.corp_id=? AND r.resource_key=?", middleware.GetUserID(c), middleware.GetCorpID(c), "dashboard").Count(&n).Error
-		if err == nil && n > 0 {
-			return true
-		}
 	}
 	response.Forbidden(c, response.CodeForbidden, "无生产工作台权限")
 	return false

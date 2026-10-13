@@ -1,0 +1,170 @@
+.drawing-manager-overlay {
+  z-index: 140;
+}
+.drawing-preview-overlay {
+  z-index: 150;
+  padding: 0;
+  align-items: stretch;
+}
+.drawing-manager {
+  width: min(1000px, 96vw);
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 70px #0004;
+}
+.drawing-manager > header,
+.drawing-preview > header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.drawing-manager-scroll {
+  overflow: auto;
+  padding: 14px;
+  min-height: 0;
+}
+.drawing-manager-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.drawing-upload {
+  border: 1px dashed #93c5fd;
+  padding: 12px;
+  border-radius: 10px;
+  background: #eff6ff;
+  margin: 12px 0;
+}
+.drawing-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+.drawing-row strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.drawing-row small {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 3px;
+}
+.drawing-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.drawing-preview {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 0;
+  overflow: hidden;
+}
+.drawing-preview > header {
+  padding: 4px 8px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.drawing-preview-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drawing-preview > header strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drawing-preview > header small {
+  flex-shrink: 0;
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #64748b;
+}
+.drawing-toolbar {
+  padding: 4px 8px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 13px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.drawing-preview > header .erp-btn,
+.drawing-preview .drawing-toolbar .erp-btn {
+  min-height: 30px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.drawing-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #e2e8f0;
+  padding: 4px;
+  text-align: center;
+}
+.drawing-viewport canvas {
+  display: block;
+  margin: auto;
+  box-shadow: 0 1px 8px #0003;
+}
+.drawing-viewport img {
+  display: block;
+  margin: auto;
+  object-fit: contain;
+}
+.drawing-preview:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  border-radius: 0;
+}
+@media (max-width: 640px) {
+  .drawing-manager {
+    width: 100%;
+    max-height: 96dvh;
+    border-radius: 12px;
+  }
+  .drawing-manager-fields {
+    grid-template-columns: 1fr;
+  }
+  .drawing-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .drawing-row-actions {
+    flex-shrink: 1;
+  }
+  .drawing-preview {
+    width: 100%;
+    height: 100dvh;
+  }
+}

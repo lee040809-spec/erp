@@ -56,7 +56,7 @@ func TestOrderIntegrityTemporaryTables(t *testing.T) {
 			t.Fatal("existing data needs reconciliation")
 		}
 	}
-	for _, name := range []string{"orders", "order_items", "order_processes", "process_time_events", "production_completions", "cost_entries", "production_plans", "order_business_records", "business_entry_policies"} {
+	for _, name := range []string{"orders", "order_items", "order_processes", "process_time_events", "production_completions", "cost_entries", "production_plans", "order_business_records", "business_entry_policies", "part_drawings", "drawing_events"} {
 		var table, ddl string
 		check(pool.QueryRow("SHOW CREATE TABLE `"+name+"`").Scan(&table, &ddl))
 		lines := strings.Split(ddl, "\n")
@@ -377,6 +377,42 @@ func TestOrderIntegrityTemporaryTables(t *testing.T) {
 			t.Fatal("explicit zero price not persisted", priced.TotalAmount)
 		}
 		t.Log("new order price storage, server derived totals, decimal cents, overproduction exclusion and explicit zero verified")
+	})
+	t.Run("drawing draft association stays in the order transaction", func(t *testing.T) {
+		draft := models.PartDrawing{CorpID: 0, StorageKey: "00000000000000000000000000000000", SHA256: strings.Repeat("0", 64), FileName: "fixture.pdf", MimeType: "application/pdf", Size: 20, UploadedBy: 7, CreatedAt: time.Now()}
+		check(db.Create(&draft).Error)
+		drawingOrder := models.Order{CorpID: 0, OrderNumber: "DRAWING-ATOMIC"}
+		plan := time.Now()
+		drawingItems := []models.OrderItem{{PartName: "图纸关联测试", Quantity: 1, ProductionQuantity: 1, UnitPrice: 1, DrawingIDs: []int64{draft.ID}, Processes: []models.OrderProcess{{Name: "铣削", PlannedStartAt: &plan}}}}
+		_, e := repo.Create(&drawingOrder, drawingItems, 7)
+		check(e)
+		var linked models.PartDrawing
+		check(db.First(&linked, draft.ID).Error)
+		if linked.OrderItemID == nil || *linked.OrderItemID != drawingItems[0].ID || !linked.IsCurrent {
+			t.Fatal("new order drawing not associated")
+		}
+		result, e := repo.GetWithFilters(OrderFilters{CorpID: 0, OrderNumber: "DRAWING-ATOMIC", Page: 1, PageSize: 20})
+		check(e)
+		if len(result.Orders) != 1 || result.Orders[0].Items[0].DrawingCount != 1 || result.Orders[0].Items[0].DrawingData != nil {
+			t.Fatal("list must return metadata without original bytes")
+		}
+		// Editing other fields cannot remove a previously linked drawing.
+		drawingItems[0].DrawingIDs = nil
+		check(repo.Update(&drawingOrder, drawingItems, OrderUpdateOptions{ActorID: 7}))
+		check(db.First(&linked, draft.ID).Error)
+		if linked.OrderItemID == nil {
+			t.Fatal("omitted drawing erased")
+		}
+		broken := models.Order{CorpID: 0, OrderNumber: "DRAWING-ROLLBACK"}
+		badItems := []models.OrderItem{{PartName: "不应保存", Quantity: 1, ProductionQuantity: 1, DrawingIDs: []int64{999999}}}
+		if _, e = repo.Create(&broken, badItems, 7); e == nil {
+			t.Fatal("invalid drawing accepted")
+		}
+		var count int64
+		check(db.Model(&models.Order{}).Where("order_number=?", "DRAWING-ROLLBACK").Count(&count).Error)
+		if count != 0 {
+			t.Fatal("failed drawing left an order behind")
+		}
 	})
 	t.Log("drawing flags and omitted-drawing edit preservation verified")
 	t.Log("fuzzy-name search, combined same-item filters, pagination, overdue and company isolation passed")
