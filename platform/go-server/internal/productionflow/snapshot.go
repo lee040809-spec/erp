@@ -4,6 +4,7 @@ import (
 	"errors"
 	"gorm.io/gorm"
 	"machining-erp/internal/models"
+	"machining-erp/pkg/database"
 )
 
 func fmtDelivery() error {
@@ -39,12 +40,50 @@ func Read(db *gorm.DB, corp, itemID int64) (Snapshot, error) {
 	if s.Item.ProductionQuantity == 0 {
 		s.Item.ProductionQuantity = s.Item.Quantity
 	}
-	ps, err := route(db, corp, itemID)
-	if err != nil {
-		return s, err
-	}
+	var ps []models.OrderProcess
 	var totals []models.ProcessQuantity
-	if err = db.Where("corp_id=? AND order_item_id=?", corp, itemID).Find(&totals).Error; err != nil {
+	var reservations []struct {
+		OrderProcessID int64
+		Quantity       int
+	}
+	var losses []archivedLoss
+	var confirmed int
+	type quantity struct {
+		LastDate        string
+		DeliveryBatchID int64
+		Quantity        int
+	}
+	var qs, ds []quantity
+	err := database.ReadParallel(db,
+		func(db *gorm.DB) error { var e error; ps, e = route(db, corp, itemID); return e },
+		func(db *gorm.DB) error {
+			return db.Where("corp_id=? AND order_item_id=?", corp, itemID).Find(&totals).Error
+		},
+		func(db *gorm.DB) error {
+			return db.Table("outsourcing_order_lines l").Joins("JOIN outsourcing_orders o ON o.id=l.outsourcing_order_id AND o.corp_id=l.corp_id").Where("l.corp_id=? AND l.order_item_id=? AND o.status NOT IN ('cancelled','deleted')", corp, itemID).Select("l.order_process_id,CAST(SUM(l.quantity-l.started_quantity) AS SIGNED) AS quantity").Group("l.order_process_id").Scan(&reservations).Error
+		},
+		func(db *gorm.DB) error { var e error; losses, e = archivedLosses(db, corp, itemID); return e },
+		func(db *gorm.DB) error {
+			var e error
+			s.HistoricalProcessNames, e = archivedProcessNames(db, corp, itemID)
+			return e
+		},
+		func(db *gorm.DB) error {
+			return db.Table("production_completions").Where("corp_id=? AND order_item_id=? AND status='confirmed'", corp, itemID).Select("CAST(COALESCE(SUM(qualified_quantity),0) AS SIGNED)").Scan(&confirmed).Error
+		},
+		func(db *gorm.DB) error {
+			return db.Where("corp_id=? AND order_item_id=?", corp, itemID).Order("due_date,id").Find(&s.Batches).Error
+		},
+		func(db *gorm.DB) error {
+			return db.Table("production_completions").Select("delivery_batch_id,CAST(SUM(qualified_quantity) AS SIGNED) AS quantity").Where("corp_id=? AND order_item_id=? AND status='confirmed' AND delivery_batch_id IS NOT NULL", corp, itemID).Group("delivery_batch_id").Find(&qs).Error
+		},
+		func(db *gorm.DB) error {
+			return db.Table("order_business_records").Select("delivery_batch_id,SUM(quantity) AS quantity,COALESCE(DATE_FORMAT(MAX(business_date),'%Y-%m-%d'),'') AS last_date").Where("corp_id=? AND order_item_id=? AND status='confirmed' AND kind='delivery' AND delivery_batch_id IS NOT NULL", corp, itemID).Group("delivery_batch_id").Find(&ds).Error
+		},
+		func(db *gorm.DB) error {
+			return db.Where("corp_id=? AND order_item_id=?", corp, itemID).Order("id DESC").Limit(50).Find(&s.Events).Error
+		})
+	if err != nil {
 		return s, err
 	}
 	byID := map[int64]models.ProcessQuantity{}
@@ -52,24 +91,9 @@ func Read(db *gorm.DB, corp, itemID int64) (Snapshot, error) {
 		byID[t.OrderProcessID] = t
 	}
 	s.Tracking = len(totals) > 0
-	var reservations []struct {
-		OrderProcessID int64
-		Quantity       int
-	}
-	if err = db.Table("outsourcing_order_lines l").Joins("JOIN outsourcing_orders o ON o.id=l.outsourcing_order_id AND o.corp_id=l.corp_id").Where("l.corp_id=? AND l.order_item_id=? AND o.status NOT IN ('cancelled','deleted')", corp, itemID).Select("l.order_process_id,CAST(SUM(l.quantity-l.started_quantity) AS SIGNED) AS quantity").Group("l.order_process_id").Scan(&reservations).Error; err != nil {
-		return s, err
-	}
 	reserved := map[int64]int{}
 	for _, r := range reservations {
 		reserved[r.OrderProcessID] = r.Quantity
-	}
-	losses, err := archivedLosses(db, corp, itemID)
-	if err != nil {
-		return s, err
-	}
-	s.HistoricalProcessNames, err = archivedProcessNames(db, corp, itemID)
-	if err != nil {
-		return s, err
 	}
 	available := s.Item.ProductionQuantity
 	for _, p := range ps {
@@ -78,44 +102,25 @@ func Read(db *gorm.DB, corp, itemID int64) (Snapshot, error) {
 		s.Processes = append(s.Processes, ProcessProgress{OrderProcess: p, Tracking: t.ID > 0, Started: t.StartedQuantity, Completed: t.CompletedQuantity, Scrap: t.ScrapQuantity, AvailableStart: max(0, available-t.StartedQuantity), InProgress: max(0, t.StartedQuantity-t.CompletedQuantity-t.ScrapQuantity), OutsourcingReserved: reserved[p.ID], AvailableOrder: max(0, s.Item.ProductionQuantity-t.StartedQuantity-reserved[p.ID])})
 		available = t.CompletedQuantity
 	}
-	var confirmed int
-	if err = db.Table("production_completions").Where("corp_id=? AND order_item_id=? AND status='confirmed'", corp, itemID).Select("CAST(COALESCE(SUM(qualified_quantity),0) AS SIGNED)").Scan(&confirmed).Error; err != nil {
-		return s, err
-	}
 	if len(ps) > 0 {
 		available -= terminalLoss(losses)
 	}
 	s.AvailableCompletion = max(0, available-confirmed)
-	if err = db.Where("corp_id=? AND order_item_id=?", corp, itemID).Order("due_date,id").Find(&s.Batches).Error; err != nil {
-		return s, err
+	completed := map[int64]int{}
+	for _, q := range qs {
+		completed[q.DeliveryBatchID] = q.Quantity
 	}
-	type quantity struct {
-		LastDate        string
-		DeliveryBatchID int64
-		Quantity        int
-	}
-	var qs, ds []quantity
-	if err = db.Table("production_completions").Select("delivery_batch_id,CAST(SUM(qualified_quantity) AS SIGNED) AS quantity").Where("corp_id=? AND order_item_id=? AND status='confirmed' AND delivery_batch_id IS NOT NULL", corp, itemID).Group("delivery_batch_id").Find(&qs).Error; err != nil {
-		return s, err
-	}
-	if err = db.Table("order_business_records").Select("delivery_batch_id,SUM(quantity) AS quantity,COALESCE(DATE_FORMAT(MAX(business_date),'%Y-%m-%d'),'') AS last_date").Where("corp_id=? AND order_item_id=? AND status='confirmed' AND kind='delivery' AND delivery_batch_id IS NOT NULL", corp, itemID).Group("delivery_batch_id").Find(&ds).Error; err != nil {
-		return s, err
+	delivered := map[int64]quantity{}
+	for _, q := range ds {
+		delivered[q.DeliveryBatchID] = q
 	}
 	for i := range s.Batches {
-		for _, q := range qs {
-			if q.DeliveryBatchID == s.Batches[i].ID {
-				s.Batches[i].QualifiedQuantity = q.Quantity
-			}
-		}
-		for _, q := range ds {
-			if q.DeliveryBatchID == s.Batches[i].ID {
-				s.Batches[i].DeliveredQuantity = q.Quantity
-				s.Batches[i].LastDeliveryDate = q.LastDate
-			}
-		}
+		s.Batches[i].QualifiedQuantity = completed[s.Batches[i].ID]
+		q := delivered[s.Batches[i].ID]
+		s.Batches[i].DeliveredQuantity = q.Quantity
+		s.Batches[i].LastDeliveryDate = q.LastDate
 	}
-	err = db.Where("corp_id=? AND order_item_id=?", corp, itemID).Order("id DESC").Limit(50).Find(&s.Events).Error
-	return s, err
+	return s, nil
 }
 
 // Enrich paged lists with one query per table rather than requests per part.

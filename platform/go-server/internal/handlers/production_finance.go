@@ -555,13 +555,8 @@ func (h *ProductionFinanceHandler) requireFinancePermission(c *gin.Context, writ
 	if write {
 		resourceKeys = []string{"btn-manage-cost-entry"}
 	}
-	var count int64
-	err := h.db.Table("users u").
-		Joins("JOIN permissions p ON p.role_id = u.role_id AND p.corp_id = u.corp_id").
-		Joins("JOIN resources r ON r.id = p.resource_id").
-		Where("u.id = ? AND u.corp_id = ? AND r.resource_key IN ?", middleware.GetUserID(c), middleware.GetCorpID(c), resourceKeys).
-		Count(&count).Error
-	if err != nil || count == 0 {
+	allowed, err := checkModuleAccess(h.db, c, resourceKeys...)
+	if err != nil || !allowed {
 		message := "无经营报表查看权限"
 		if write {
 			message = "无成本费用管理权限，请联系管理员"

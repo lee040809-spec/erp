@@ -578,7 +578,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
       {/* 新建/修改弹窗 */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
             <div className="p-6 border-b border-zinc-200">
               <h3 className="text-xl font-bold text-zinc-900">
@@ -598,7 +598,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
               </div>
             </div>
             <div className="p-6 border-t border-zinc-200 flex justify-end gap-3">
-              <button
+              <button data-escape-close
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-zinc-600 hover:text-zinc-900 transition-colors"
               >
@@ -617,14 +617,14 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
       {/* 删除确认弹窗 */}
       {deletingId && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
             <div className="p-6">
               <h3 className="text-xl font-bold text-zinc-900 mb-2">确认删除</h3>
               <p className="text-zinc-500">删除后无法恢复，确定要删除该模板吗？</p>
             </div>
             <div className="p-6 border-t border-zinc-200 flex justify-end gap-3">
-              <button
+              <button data-escape-close
                 onClick={() => setDeletingId(null)}
                 className="px-4 py-2 text-zinc-600 hover:text-zinc-900 transition-colors"
               >
@@ -643,7 +643,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
       {/* 预览弹窗 - 使用Univer */}
       {showPreviewModal && previewSheetData && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl h-[85vh] overflow-hidden">
             <div className="p-4 border-b border-zinc-200 flex justify-between items-center">
               <h3 className="text-xl font-bold text-zinc-900">模板预览</h3>
@@ -654,7 +654,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 >
                   保存修改
                 </button>
-                <button
+                <button data-escape-close
                   onClick={() => {
                     setShowPreviewModal(false);
                     setPreviewTemplateId(null);
@@ -688,11 +688,11 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
       {/* 绑定按钮弹框 */}
       {showBindModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[80vh] flex flex-col">
             <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between">
               <h3 className="text-lg font-bold">绑定按钮 - {bindingTemplateName}</h3>
-              <button
+              <button data-escape-close
                 onClick={() => { setShowBindModal(false); setBindingTemplateId(null); setResourcesWithButtons([]); }}
                 className="text-zinc-400 hover:text-zinc-600"
               >
@@ -822,7 +822,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
             )}
 
             <div className="px-6 py-4 border-t border-zinc-200">
-              <button
+              <button data-escape-close
                 onClick={() => { setShowBindModal(false); setBindingTemplateId(null); setResourcesWithButtons([]); }}
                 className="w-full px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
               >
@@ -835,7 +835,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
       {/* 测试打印弹框 */}
       {showTestPrintModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
             <div className="p-6 border-b border-zinc-200">
               <h3 className="text-xl font-bold text-zinc-900">测试打印 - {testPrintTemplateName}</h3>
@@ -857,7 +857,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
               </div>
             </div>
             <div className="p-6 border-t border-zinc-200 flex justify-end gap-3">
-              <button
+              <button data-escape-close
                 onClick={() => setShowTestPrintModal(false)}
                 className="px-4 py-2 text-zinc-600 hover:text-zinc-900 transition-colors"
               >
@@ -877,7 +877,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
 
       {/* Toast提示 */}
       {toast && (
-        <div
+        <div data-escape-dialog
           className={`fixed inset-0 z-[200] flex items-center justify-center bg-black/30 animate-in fade-in duration-200`}
         >
           <div
@@ -896,7 +896,7 @@ const PrintTemplates: React.FC<PrintTemplatesProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             )}
-            <span className="font-medium text-lg">{toast.message}</span>
+            <span className="font-medium text-lg">{toast.message}</span><button type="button" data-escape-close aria-label="关闭提示" className="ml-2 text-xl" onClick={()=>setToast(null)}>×</button>
           </div>
         </div>
       )}

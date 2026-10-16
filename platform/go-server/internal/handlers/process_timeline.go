@@ -9,6 +9,7 @@ import (
 	"machining-erp/internal/models"
 	"machining-erp/internal/productionflow"
 	"machining-erp/internal/repository"
+	"machining-erp/pkg/database"
 	"machining-erp/pkg/response"
 	"machining-erp/pkg/utils"
 	"strconv"
@@ -37,23 +38,26 @@ func (h *ProcessTimelineHandler) List(c *gin.Context) {
 		return
 	}
 	processes := []models.OrderProcess{}
-	if err = h.db.Omit("outsourcing_fee").Where("order_item_id=? AND corp_id=?", itemID, corp).Order("sort_order,id").Find(&processes).Error; err != nil {
-		response.InternalError(c, response.CodeInternal, "读取工序时间失败")
-		return
-	}
 	archived := []models.OrderProcess{}
-	if err = h.db.Unscoped().Omit("outsourcing_fee").Where("order_item_id=? AND corp_id=? AND deleted_at IS NOT NULL", itemID, corp).Order("deleted_at DESC,id DESC").Limit(100).Find(&archived).Error; err != nil {
-		response.InternalError(c, response.CodeInternal, "读取历史工序失败")
-		return
-	}
 	events := []models.ProcessTimeEvent{}
-	if err = h.db.Where("order_item_id=? AND corp_id=?", itemID, corp).Order("id DESC").Limit(50).Find(&events).Error; err != nil {
-		response.InternalError(c, response.CodeInternal, "读取时间修改记录失败")
-		return
-	}
-	deliveries, err := repository.LoadDeliverySummaries(h.db, corp, []int64{itemID})
+	var deliveries map[int64]repository.DeliverySummary
+	err = database.ReadParallel(h.db.WithContext(c.Request.Context()),
+		func(db *gorm.DB) error {
+			return db.Omit("outsourcing_fee").Where("order_item_id=? AND corp_id=?", itemID, corp).Order("sort_order,id").Find(&processes).Error
+		},
+		func(db *gorm.DB) error {
+			return db.Unscoped().Omit("outsourcing_fee").Where("order_item_id=? AND corp_id=? AND deleted_at IS NOT NULL", itemID, corp).Order("deleted_at DESC,id DESC").Limit(100).Find(&archived).Error
+		},
+		func(db *gorm.DB) error {
+			return db.Where("order_item_id=? AND corp_id=?", itemID, corp).Order("id DESC").Limit(50).Find(&events).Error
+		},
+		func(db *gorm.DB) error {
+			var e error
+			deliveries, e = repository.LoadDeliverySummaries(db, corp, []int64{itemID})
+			return e
+		})
 	if err != nil {
-		response.InternalError(c, response.CodeInternal, "读取送货节点失败")
+		response.InternalError(c, response.CodeInternal, "读取工序与送货节点失败")
 		return
 	}
 	response.Success(c, gin.H{"archived_processes": withoutAmounts(archived), "processes": withoutAmounts(processes), "events": events, "delivery": deliveries[itemID], "start_date": item.StartDate, "due_date": item.DueDate, "quantity": item.Quantity, "can_manage": h.canWrite(c), "timezone": "Asia/Shanghai"})
@@ -172,9 +176,6 @@ func (h *ProcessTimelineHandler) Save(c *gin.Context) {
 			}
 		}
 		if actualChanged {
-			if strings.TrimSpace(req.Reason) == "" {
-				return errors.New("补录或更正实际时间须填写原因")
-			}
 			switch {
 			case next.ActualEndAt != nil:
 				next.Status = models.ProcessStatusCompleted
@@ -184,7 +185,8 @@ func (h *ProcessTimelineHandler) Save(c *gin.Context) {
 				next.Status = models.ProcessStatusPending
 			}
 		}
-		if err = tx.Model(&before).Updates(map[string]interface{}{"planned_start_at": next.PlannedStartAt, "planned_end_at": next.PlannedEndAt, "actual_start_at": next.ActualStartAt, "actual_end_at": next.ActualEndAt, "status": next.Status}).Error; err != nil {
+		// Keep before intact: GORM updates its model fields, which would erase the audit comparison.
+		if err = tx.Model(&models.OrderProcess{}).Where("id=? AND corp_id=?", before.ID, corp).Updates(map[string]interface{}{"planned_start_at": next.PlannedStartAt, "planned_end_at": next.PlannedEndAt, "actual_start_at": next.ActualStartAt, "actual_end_at": next.ActualEndAt, "status": next.Status}).Error; err != nil {
 			return err
 		}
 		// Use the existing transaction and status/qualified-count rules; this never creates a completion or changes output value.

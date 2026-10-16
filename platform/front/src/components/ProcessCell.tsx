@@ -56,7 +56,7 @@ const ProcessCell: React.FC<ProcessCellProps> = ({ processes, onUpdate, hideCost
       </button>}
 
       {(isOpen || inline) && (<>
-          {!inline && <div className="fixed inset-0 z-[200] bg-zinc-900/20 backdrop-blur-[2px]" onClick={() => setIsOpen(false)}/>}
+          {!inline && <div data-escape-dialog className="fixed inset-0 z-[200] bg-zinc-900/20 backdrop-blur-[2px]" onClick={() => setIsOpen(false)}/>}
           <div className={inline ? "space-y-4" : "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-white border border-zinc-200 rounded-3xl shadow-2xl p-5 sm:p-8 w-[800px] max-w-[95vw] max-h-[90vh] overflow-auto space-y-6"}>
             <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
               <div className="flex items-center gap-2">

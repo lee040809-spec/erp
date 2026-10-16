@@ -26,7 +26,7 @@ const AiDrawingModal: React.FC<AiDrawingModalProps> = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+    <div data-escape-dialog data-escape-blocked={isGenerating} className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -45,7 +45,7 @@ const AiDrawingModal: React.FC<AiDrawingModalProps> = ({
             <Sparkles className="w-5 h-5 text-zinc-900" />
             <h3 className="text-xl font-bold">AI 图纸助手</h3>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full">
+          <button data-escape-close onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full">
             <X className="w-5 h-5" />
           </button>
         </div>

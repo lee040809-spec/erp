@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"machining-erp/pkg/database"
 	"net/http/httptest"
 	"os"
@@ -48,5 +49,24 @@ func TestWorkbenchReadAccessTemporaryTables(t *testing.T) {
 		if h.allowed(c, false) != tc.read || h.allowed(c, true) != tc.write || h.canManage(c) != tc.write {
 			t.Fatalf("scope/permission changed for user %d corp %d", tc.id, tc.corp)
 		}
+	}
+	permissionQueries := 0
+	db.Callback().Query().Before("gorm:query").Register("count_permissions", func(*gorm.DB) { permissionQueries++ })
+	contextForUser := func() *gin.Context {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Set("userID", int64(1))
+		c.Set("corpID", int64(0))
+		c.Set("roleType", "user")
+		return c
+	}
+	c := contextForUser()
+	if hasModuleAccess(db, c, "orders") || !hasModuleAccess(db, c, "production_dashboard") || hasModuleAccess(db, c, "finance") || permissionQueries != 1 {
+		t.Fatalf("permission keys should share exactly one request-scoped read, got %d", permissionQueries)
+	}
+	if err = db.Exec("DELETE FROM permissions WHERE role_id=10 AND corp_id=0").Error; err != nil {
+		t.Fatal(err)
+	}
+	if hasModuleAccess(db, contextForUser(), "production_dashboard") || permissionQueries != 2 {
+		t.Fatal("a new request reused stale permissions after revocation")
 	}
 }

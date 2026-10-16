@@ -165,7 +165,7 @@ export default function DrawingPreview({
   const isImage =
     drawing?.mime_type.startsWith("image/") || blob?.type.startsWith("image/");
   return (
-    <div className="erp-overlay drawing-preview-overlay">
+    <div data-escape-dialog className="erp-overlay drawing-preview-overlay">
       <section
         ref={container}
         role="dialog"
@@ -184,7 +184,7 @@ export default function DrawingPreview({
                 : ""}
             </small>
           </div>
-          <button
+          <button data-escape-close
             type="button"
             className="erp-btn"
             aria-label="关闭图纸预览"

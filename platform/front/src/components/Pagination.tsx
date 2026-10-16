@@ -9,6 +9,7 @@ interface PaginationProps {
   onPageSizeChange: (pageSize: number) => void;
   itemName?: string;
   activeColor?: string;
+  disabled?: boolean;
 }
 
 const Pagination: React.FC<PaginationProps> = ({
@@ -18,7 +19,8 @@ const Pagination: React.FC<PaginationProps> = ({
   onPageChange,
   onPageSizeChange,
   itemName = '订单',
-  activeColor = 'blue'
+  activeColor = 'blue',
+  disabled = false
 }) => {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -35,8 +37,8 @@ const Pagination: React.FC<PaginationProps> = ({
 
   const getPageNumbers = () => {
     if (totalPages <= 1) return [1];
-    return Array.from({ length: totalPages }, (_, i) => i + 1)
-      .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
+    return [...new Set([1, totalPages, page - 1, page, page + 1])]
+      .filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
   };
 
   const pageNumbers = getPageNumbers();
@@ -48,6 +50,7 @@ const Pagination: React.FC<PaginationProps> = ({
         <select
           aria-label="每页数量"
           value={pageSize}
+          disabled={disabled}
           onChange={(e) => {
             onPageSizeChange(Number(e.target.value));
           }}
@@ -61,7 +64,7 @@ const Pagination: React.FC<PaginationProps> = ({
       <div className="erp-pagination-controls flex items-center gap-2">
         <button
           aria-label="上一页"
-          disabled={page === 1}
+          disabled={disabled || page <= 1}
           onClick={() => onPageChange(page - 1)}
           className="p-2 border border-zinc-200 rounded-xl hover:bg-zinc-50 disabled:opacity-30 transition-colors"
         >
@@ -73,6 +76,9 @@ const Pagination: React.FC<PaginationProps> = ({
             <React.Fragment key={p}>
               {i > 0 && arr[i - 1] !== p - 1 && <span className="px-2 text-zinc-400">...</span>}
               <button
+                type="button"
+                disabled={disabled}
+                aria-current={page === p ? 'page' : undefined}
                 onClick={() => onPageChange(p)}
                 className={`w-10 h-10 rounded-xl font-bold transition-all ${
                   page === p
@@ -87,7 +93,7 @@ const Pagination: React.FC<PaginationProps> = ({
         </div>
         <button
           aria-label="下一页"
-          disabled={page === totalPages || total === 0}
+          disabled={disabled || page >= totalPages || total === 0}
           onClick={() => onPageChange(page + 1)}
           className="p-2 border border-zinc-200 rounded-xl hover:bg-zinc-50 disabled:opacity-30 transition-colors"
         >

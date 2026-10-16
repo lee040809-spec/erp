@@ -20,45 +20,7 @@ func (h *ProductionFinanceHandler) GetSummary(c *gin.Context) {
 		return
 	}
 	corpID := middleware.GetCorpID(c)
-	start := year + "-01-01"
-	end := strconv.Itoa(mustYear(year)+1) + "-01-01"
-	type produced struct {
-		Month    string
-		Quantity string
-		Billable string
-		Reserve  string
-		Count    int64
-		Output   string
-	}
-	type spent struct {
-		Month       string
-		Material    string
-		Outsourcing string
-		Other       string
-		Total       string
-	}
-	type period struct {
-		Month  string
-		Amount string
-	}
-	var outputs []produced
-	var costs []spent
-	var periods []period
-	err := h.db.Raw(`SELECT DATE_FORMAT(business_date,'%Y-%m') AS month,CAST(SUM(qualified_quantity) AS CHAR) AS quantity,CAST(SUM(billable_quantity) AS CHAR) AS billable,CAST(SUM(qualified_quantity-billable_quantity) AS CHAR) AS reserve,COUNT(*) AS count,CAST(SUM(output_value) AS CHAR) AS output
- FROM production_completions WHERE corp_id=? AND status='confirmed' AND business_date>=? AND business_date<? GROUP BY month`, corpID, start, end).Scan(&outputs).Error
-	if err == nil {
-		err = h.db.Raw(`SELECT DATE_FORMAT(p.business_date,'%Y-%m') AS month,
- CAST(SUM(CASE WHEN e.cost_type='material' THEN a.allocated_amount ELSE 0 END) AS CHAR) AS material,
- CAST(SUM(CASE WHEN e.cost_type='outsourcing' THEN a.allocated_amount ELSE 0 END) AS CHAR) AS outsourcing,
- CAST(SUM(CASE WHEN e.cost_type NOT IN ('material','outsourcing') THEN a.allocated_amount ELSE 0 END) AS CHAR) AS other,
- CAST(SUM(a.allocated_amount) AS CHAR) AS total
- FROM cost_allocations a JOIN production_completions p ON p.id=a.production_completion_id AND p.corp_id=a.corp_id AND p.status='confirmed'
- JOIN cost_entries e ON e.id=a.cost_entry_id AND e.corp_id=a.corp_id AND e.status='confirmed' AND e.cost_type<>'period'
- WHERE a.corp_id=? AND p.business_date>=? AND p.business_date<? GROUP BY month`, corpID, start, end).Scan(&costs).Error
-	}
-	if err == nil {
-		err = h.db.Raw("SELECT accounting_month AS month,CAST(SUM(net_amount) AS CHAR) AS amount FROM cost_entries WHERE corp_id=? AND status='confirmed' AND cost_type='period' AND accounting_month>=? AND accounting_month<? GROUP BY accounting_month", corpID, year+"-01", strconv.Itoa(mustYear(year)+1)+"-01").Scan(&periods).Error
-	}
+	s, err := readFinanceSummary(h.db.WithContext(c.Request.Context()), corpID, year)
 	if err != nil {
 		response.InternalError(c, response.CodeInternal, "读取经营汇总失败")
 		return
@@ -67,10 +29,17 @@ func (h *ProductionFinanceHandler) GetSummary(c *gin.Context) {
 	get := func(month string) *models.MonthlyFinanceSummary {
 		if byMonth[month] == nil {
 			byMonth[month] = &models.MonthlyFinanceSummary{Month: month, QualifiedQuantity: "0", BillableQuantity: "0", ReserveQuantity: "0", OutputValue: "0.00", MaterialCost: "0.00", OutsourcingCost: "0.00", OtherProductionCost: "0.00", ProductionCost: "0.00", PeriodExpense: "0.00", ClosingStatus: "open"}
+			byMonth[month].OrderAmount = "0.00"
+			byMonth[month].OrderCosts = models.OrderCostTotals{Material: "0.00", Outsourcing: "0.00", Tool: "0.00", Fixture: "0.00", Other: "0.00"}
 		}
 		return byMonth[month]
 	}
-	for _, p := range outputs {
+	for _, o := range s.Orders {
+		m := get(o.Month)
+		m.OrderAmount = o.Amount
+		m.OrderCosts = enteredOrderCosts(o)
+	}
+	for _, p := range s.Outputs {
 		m := get(p.Month)
 		m.QualifiedQuantity = p.Quantity
 		m.BillableQuantity = p.Billable
@@ -78,30 +47,22 @@ func (h *ProductionFinanceHandler) GetSummary(c *gin.Context) {
 		m.CompletionCount = p.Count
 		m.OutputValue = p.Output
 	}
-	for _, s := range costs {
+	for _, s := range s.Costs {
 		m := get(s.Month)
 		m.MaterialCost = s.Material
 		m.OutsourcingCost = s.Outsourcing
 		m.OtherProductionCost = s.Other
 		m.ProductionCost = s.Total
 	}
-	for _, p := range periods {
+	for _, p := range s.Periods {
 		get(p.Month).PeriodExpense = p.Amount
 	}
-	var closings []struct {
-		AccountingMonth string
-		Status          string
-	}
-	if h.db.Table("monthly_closings").Where("corp_id=? AND accounting_month>=? AND accounting_month<?", corpID, year+"-01", strconv.Itoa(mustYear(year)+1)+"-01").Find(&closings).Error != nil {
-		response.InternalError(c, response.CodeInternal, "读取月结失败")
-		return
-	}
-	for _, cl := range closings {
+	for _, cl := range s.Closings {
 		if m := byMonth[cl.AccountingMonth]; m != nil {
 			m.ClosingStatus = cl.Status
 		}
 	}
-	annual := models.AnnualFinanceSummary{Year: year, OutputValue: "0.00", ProductionCost: "0.00", PeriodExpense: "0.00"}
+	annual := models.AnnualFinanceSummary{Year: year, OrderAmount: "0.00", OutputValue: "0.00", ProductionCost: "0.00", PeriodExpense: "0.00"}
 	months := make([]models.MonthlyFinanceSummary, 0)
 	for i := 12; i >= 1; i-- {
 		key := year + "-"
@@ -114,23 +75,14 @@ func (h *ProductionFinanceHandler) GetSummary(c *gin.Context) {
 			m.OperatingProfit = decimalSubtract(m.ProductionProfit, m.PeriodExpense)
 			months = append(months, *m)
 			annual.OutputValue = decimalAdd(annual.OutputValue, m.OutputValue)
+			annual.OrderAmount = decimalAdd(annual.OrderAmount, m.OrderAmount)
 			annual.ProductionCost = decimalAdd(annual.ProductionCost, m.ProductionCost)
 			annual.PeriodExpense = decimalAdd(annual.PeriodExpense, m.PeriodExpense)
 		}
 	}
 	annual.ProductionProfit = decimalSubtract(annual.OutputValue, annual.ProductionCost)
 	annual.OperatingProfit = decimalSubtract(annual.ProductionProfit, annual.PeriodExpense)
-	var pending struct {
-		Amount string
-		Count  int64
-	}
-	if h.db.Raw(`SELECT CAST(COALESCE(SUM(e.net_amount-COALESCE(a.total,0)),0) AS CHAR) AS amount,COUNT(*) AS count FROM cost_entries e
- LEFT JOIN (SELECT corp_id,cost_entry_id,SUM(allocated_amount) AS total FROM cost_allocations GROUP BY corp_id,cost_entry_id) a ON a.corp_id=e.corp_id AND a.cost_entry_id=e.id
- WHERE e.corp_id=? AND e.status='confirmed' AND e.cost_type<>'period' AND e.net_amount>COALESCE(a.total,0)`, corpID).Scan(&pending).Error != nil {
-		response.InternalError(c, response.CodeInternal, "读取未分摊成本失败")
-		return
-	}
-	response.Success(c, gin.H{"year": year, "months": months, "annual": annual, "pending_cost_amount": pending.Amount, "pending_cost_count": pending.Count})
+	response.Success(c, gin.H{"year": year, "months": months, "annual": annual, "pending_cost_amount": s.Pending.Amount, "pending_cost_count": s.Pending.Count})
 }
 
 func mustYear(year string) int { n, _ := strconv.Atoi(year); return n }

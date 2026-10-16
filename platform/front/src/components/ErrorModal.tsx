@@ -18,7 +18,7 @@ const ErrorModal: React.FC<ErrorModalProps> = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+    <div data-escape-dialog className="fixed inset-0 z-[140] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -38,7 +38,7 @@ const ErrorModal: React.FC<ErrorModalProps> = ({
           </div>
           <h3 className="text-lg font-bold text-zinc-900 mb-2">{title}</h3>
           <p className="text-zinc-500 text-sm mb-6">{message}</p>
-          <button
+          <button data-escape-close
             onClick={onClose}
             className="w-full px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-colors"
           >

@@ -12,58 +12,58 @@ import {
 import DrawingUpload from "./DrawingUpload";
 import DrawingHistoryPicker from "./DrawingHistoryPicker";
 import DrawingPreview from "./DrawingPreview";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import "./drawings.css";
+const initial: DrawingList = {
+  drawings: [],
+  legacy: false,
+  can_manage: false,
+  events: [],
+};
 export default function DrawingManager(
   p: DrawingButtonProps & {
     onClose: () => void;
     onCountChange?: (count: number) => void;
   },
 ) {
-  const [data, setData] = useState<DrawingList>({
-      drawings: [],
-      legacy: false,
-      can_manage: false,
-      events: [],
-    }),
-    [loading, setLoading] = useState(!!p.itemId),
-    [busy, setBusy] = useState(false),
+  const request = useCallback(() => listDrawings(p.itemId!), [p.itemId]);
+  const {
+    data,
+    loading,
+    error: readError,
+    reload: load,
+  } = useAsyncResource(request, initial, !!p.itemId);
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [reason, setReason] = useState(""),
     [history, setHistory] = useState(false),
     [preview, setPreview] = useState<PartDrawing | null>(null),
     [legacy, setLegacy] = useState("");
-  const load = useCallback(async () => {
-    if (!p.itemId) return;
-    setLoading(true);
-    try {
-      const result = await listDrawings(p.itemId);
-      setData(result);
-      p.onCountChange?.(
-        result.drawings.filter((d) => d.is_current).length +
-          (result.legacy ? 1 : 0),
-      );
-      setError("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "读取失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [p.itemId, p.onCountChange]);
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (p.itemId && !loading && !readError)
+      p.onCountChange?.(
+        data.drawings.filter((d) => d.is_current).length +
+          (data.legacy ? 1 : 0),
+      );
+  }, [p.itemId, p.onCountChange, data, loading, readError]);
   const rows = p.itemId ? data.drawings : p.drafts || [];
   const canManage =
-    !p.disabled && (p.itemId ? data.can_manage : !!p.onDraftChange);
+    !p.disabled &&
+    !loading &&
+    !readError &&
+    (p.itemId ? data.can_manage : !!p.onDraftChange);
   const added = async (d: PartDrawing) => {
+    let refreshed = true;
     if (p.itemId) {
-      await load();
+      refreshed = await load();
       p.onChanged?.();
     } else p.onDraftChange?.([...rows, d]);
     setNotice(
       p.itemId
-        ? "图纸已保存，并关联当前零件。"
+        ? refreshed
+          ? "图纸已保存，并关联当前零件。"
+          : "图纸已保存，但清单刷新失败。请重新读取清单，不要重复上传。"
         : "图纸已上传，保存订单后完成零件关联。",
     );
     setReason("");
@@ -81,9 +81,13 @@ export default function DrawingManager(
     setError("");
     try {
       await setDrawingCurrent(d.id, !d.is_current, reason);
-      await load();
+      const refreshed = await load();
       p.onChanged?.();
-      setNotice("图纸版本状态已更新。");
+      setNotice(
+        refreshed
+          ? "图纸版本状态已更新。"
+          : "版本修改已保存，但清单刷新失败。请重新读取清单，不要重复操作。",
+      );
       setReason("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "修改失败");
@@ -119,18 +123,8 @@ export default function DrawingManager(
     legacy_import: "旧图纸迁移",
   };
   return createPortal(
-    <div
+    <div data-escape-dialog data-escape-blocked={busy}
       className="erp-overlay drawing-manager-overlay"
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Escape" && !busy) {
-          e.preventDefault();
-          if (preview || legacy) {
-            setPreview(null);
-            setLegacy("");
-          } else p.onClose();
-        }
-      }}
     >
       <section
         role="dialog"
@@ -146,7 +140,7 @@ export default function DrawingManager(
               当前生产图纸与历史版本统一维护
             </p>
           </div>
-          <button
+          <button data-escape-close
             type="button"
             aria-label="关闭零件图纸"
             className="erp-btn"
@@ -161,6 +155,11 @@ export default function DrawingManager(
           {error && (
             <p role="alert" className="text-sm text-rose-600 mb-3">
               {error}
+            </p>
+          )}
+          {readError && (
+            <p role="alert" className="text-sm text-amber-700 mb-3">
+              清单读取失败：{readError}
               <button
                 type="button"
                 className="erp-btn ml-2"
@@ -203,7 +202,12 @@ export default function DrawingManager(
           <div className="flex justify-between items-center">
             <strong className="text-sm">
               {p.itemId ? "生产图纸" : "待保存到订单的图纸"}{" "}
-              {loading ? "读取中…" : error && !rows.length ? "未读取" : rows.filter((d) => d.is_current || !p.itemId).length + (data.legacy ? 1 : 0)}
+              {loading
+                ? "读取中…"
+                : readError
+                  ? "未读取"
+                  : rows.filter((d) => d.is_current || !p.itemId).length +
+                    (data.legacy ? 1 : 0)}
             </strong>
             {p.itemId && rows.some((d) => !d.is_current) && (
               <button
@@ -215,7 +219,7 @@ export default function DrawingManager(
               </button>
             )}
           </div>
-          {!rows.length && !loading && !data.legacy && (
+          {!rows.length && !loading && !readError && !data.legacy && (
             <p className="text-sm text-slate-500 my-4">
               暂无图纸{canManage ? "，可以上传或引用历史图纸。" : "。"}
             </p>

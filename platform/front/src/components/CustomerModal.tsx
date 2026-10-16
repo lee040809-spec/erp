@@ -45,7 +45,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+    <div data-escape-dialog className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <div
         onClick={onClose}
         className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm"
@@ -53,7 +53,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl">
         <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
           <h3 className="text-xl font-bold">{editingCustomer ? '修改客户' : '新建客户'}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full">
+          <button data-escape-close onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -134,7 +134,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button
+            <button data-escape-close
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-zinc-500 hover:text-zinc-700 transition-colors"

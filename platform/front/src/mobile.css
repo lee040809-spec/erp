@@ -73,7 +73,7 @@
   .erp-finance-cards>.erp-card {padding:12px;min-width:0;}
   .erp-finance-cards>.erp-card>div {width:30px;height:30px;margin-bottom:8px;border-radius:8px;}
   .erp-finance-cards p {font-size:12px;overflow-wrap:anywhere;}
-  .erp-finance-cards p:last-child {font-size:19px;font-variant-numeric:tabular-nums;}
+  .erp-finance-cards .erp-finance-card-amount {font-size:19px;font-variant-numeric:tabular-nums;}
   .erp-table-scroll {max-height:none;overflow:visible;}
   .erp-responsive-table {display:block;width:100%;min-width:0;font-size:13px;}
   .erp-responsive-table thead {display:none;}
@@ -107,5 +107,5 @@
 
 @media(max-width:359px) {
   .erp-order-filters>div {grid-template-columns:1fr;}
-  .erp-finance-cards p:last-child {font-size:17px;}
+  .erp-finance-cards .erp-finance-card-amount {font-size:17px;}
 }

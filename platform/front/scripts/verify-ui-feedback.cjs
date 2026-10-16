@@ -11,6 +11,8 @@ function load(file) {
     if (name === 'react') return react;
     if (name === 'react/jsx-runtime') return require(root + '/node_modules/react/jsx-runtime');
     if (name === 'lucide-react') return require(root + '/node_modules/lucide-react');
+    if (name.endsWith('financePresentation')) return load('features/accounting/financePresentation.ts');
+    if (name.startsWith('../features/')) return { __esModule: true, default: () => null };
     if (name.endsWith('financeAccess')) return { fetchFinanceAccess: async () => ({ can_view_summary: true }) };
     if (name === '../services/api') return { fetchFinanceSummaryApi: async () => { if (failFinance) throw Error('报表连接失败'); return { year: '2026', months: [], annual: { output_value: '123.45', production_cost: '0', production_profit: '123.45', operating_profit: '123.45' } }; } };
     if (name.startsWith('../components/')) return { __esModule: true, default: () => null };

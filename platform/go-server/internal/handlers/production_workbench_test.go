@@ -221,6 +221,10 @@ func TestWorkbenchTemporaryTables(t *testing.T) {
 	orders := NewOrderHandler(orderRepo, itemRepo, processRepo, nil, db)
 	exec("UPDATE order_items SET unit_price=20,total_price=200,tool_cost=5,material_cost=7 WHERE id=1")
 	exec("UPDATE order_processes SET outsourcing_fee=77 WHERE id=1")
+	maskedTasks:=call(h.List,"","/?pageSize=100","user",200)["data"].(map[string]interface{})["items"].([]interface{})
+	for _,raw:=range maskedTasks { if raw.(map[string]interface{})["order_costs"]!=nil { t.Fatal("production-only user received order costs") } }
+	visibleCosts:=call(h.List,"","/?search=TEST","admin",200)["data"].(map[string]interface{})["items"].([]interface{})[0].(map[string]interface{})["order_costs"].(map[string]interface{})
+	if !sameDecimal(visibleCosts["material"].(string),"7") || !sameDecimal(visibleCosts["tool"].(string),"5") || !sameDecimal(visibleCosts["outsourcing"].(string),"77") { t.Fatalf("workbench costs missing: %+v",visibleCosts) }
 	maskedOrder := call(orders.List, "", "/?pageSize=10", "user", 200)["data"].([]interface{})[0].(map[string]interface{})
 	if maskedOrder["total_amount"] != nil {
 		t.Fatal("production order response leaked total")

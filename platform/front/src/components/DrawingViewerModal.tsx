@@ -11,7 +11,7 @@ const DrawingViewerModal: React.FC<DrawingViewerModalProps> = ({ show, onClose }
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+    <div data-escape-dialog className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -31,7 +31,7 @@ const DrawingViewerModal: React.FC<DrawingViewerModalProps> = ({ show, onClose }
             <button className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500">
               <Download className="w-5 h-5" />
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-lg">
+            <button data-escape-close onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-lg">
               <X className="w-5 h-5" />
             </button>
           </div>

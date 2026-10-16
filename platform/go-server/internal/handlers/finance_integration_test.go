@@ -62,8 +62,13 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 	exec("CREATE TEMPORARY TABLE order_items (id BIGINT PRIMARY KEY,corp_id BIGINT,order_id BIGINT,part_name VARCHAR(50),quantity INT,scrap_quantity INT,status VARCHAR(20),completion_date DATE NULL,unit_price DECIMAL(15,4),supply_mode VARCHAR(32),currency CHAR(3),tax_inclusive TINYINT,production_quantity INT DEFAULT 0)")
 	exec("CREATE TEMPORARY TABLE order_processes (id BIGINT,corp_id BIGINT,order_item_id BIGINT,name VARCHAR(50),status VARCHAR(20))")
 	workflowtest.Tables(t, db, "order_processes", "production_completions", "order_business_records", "cost_entries")
-	exec("INSERT INTO orders VALUES (1,0,'TEST','TEST','processing')")
-	exec("INSERT INTO order_items VALUES (1,0,1,'TEST',100,0,'processing',NULL,20,'self_purchased','CNY',0,0),(2,0,1,'HISTORY',10,2,'delivered','2026-03-01',2,'customer_supplied','CNY',0,0)")
+	exec("INSERT INTO orders(id,corp_id,order_number,customer_name,status) VALUES (1,0,'TEST','TEST','processing')")
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,scrap_quantity,status,completion_date,unit_price,supply_mode,currency,tax_inclusive,production_quantity) VALUES (1,0,1,'TEST',100,0,'processing',NULL,20,'self_purchased','CNY',0,0),(2,0,1,'HISTORY',10,2,'delivered','2026-03-01',2,'customer_supplied','CNY',0,0)")
+	exec("ALTER TABLE orders ADD COLUMN start_date DATE NULL")
+	exec("ALTER TABLE order_items ADD COLUMN start_date DATE NULL,ADD COLUMN material_cost DECIMAL(15,2),ADD COLUMN tool_cost DECIMAL(15,2),ADD COLUMN fixture_cost DECIMAL(15,2),ADD COLUMN other_cost DECIMAL(15,2)")
+	exec("ALTER TABLE order_processes ADD COLUMN outsourcing_fee DECIMAL(15,2) DEFAULT 0,ADD COLUMN is_outsourced TINYINT DEFAULT 0")
+	exec("UPDATE orders SET start_date='2026-01-10'")
+	exec("UPDATE order_items SET start_date='2026-02-01',material_cost=123.45,tool_cost=2,fixture_cost=3,other_cost=4 WHERE id=1")
 	h := NewProductionFinanceHandler(db)
 	gin.SetMode(gin.TestMode)
 	roleType := "admin"
@@ -114,8 +119,21 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 	call(h.AllocateCost, `{"cost_entry_id":1,"production_completion_id":2,"allocated_amount":"600.01","allocation_basis":"over"}`, nil, "/", 400)
 	call(h.AllocateCost, `{"cost_entry_id":1,"production_completion_id":2,"allocated_amount":"600","allocation_basis":"60%"}`, nil, "/", 200)
 	call(h.CreateCostEntry, `{"cost_type":"period","amount":"50","tax_amount":"0","net_amount":"50","business_date":"2026-02-02"}`, nil, "/", 200)
+	exec("INSERT INTO order_processes(id,corp_id,order_item_id,name,status,is_outsourced,outsourcing_fee) VALUES(99,0,1,'外协测试','completed',1,80),(100,0,1,'内部加工','completed',0,900),(101,0,1,'送货','completed',1,900)")
 	data := call(h.GetSummary, "", nil, "/?year=2026", 200)["data"].(map[string]interface{})
 	annual := data["annual"].(map[string]interface{})
+	if annual["order_amount"] != "3020.00" {
+		t.Fatalf("order amount must use ordered quantity and current price, not completion quantities: %+v", annual)
+	}
+	for _, raw := range data["months"].([]interface{}) {
+		m := raw.(map[string]interface{})
+		if m["month"] == "2026-02" {
+			cost := m["order_costs"].(map[string]interface{})
+			if m["order_amount"] != "3000.00" || !sameDecimal(cost["material"].(string), "123.45") || !sameDecimal(cost["outsourcing"].(string), "80") {
+				t.Fatalf("part-date priority or entered cost grouping incorrect: %+v", m)
+			}
+		}
+	}
 	if annual["output_value"] != "2600.00" || annual["production_cost"] != "1000.00" || annual["operating_profit"] != "1550.00" || data["pending_cost_count"] != float64(0) {
 		t.Fatalf("cross-month summary incorrect: %+v", data)
 	}
@@ -130,7 +148,7 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 	call(h.AllocateCost, `{"cost_entry_id":3,"production_completion_id":3,"allocated_amount":"1","allocation_basis":"customer material"}`, nil, "/", 400)
 	call(h.FinanceDetails, "", nil, "/?month=2026-01", 200)
 	call(h.PreviewHistory, "", nil, "/?year=2026", 200)
-	exec("INSERT INTO order_items VALUES(4,0,1,'SPLIT-HISTORY',10,0,'delivered','2026-04-01',5,'customer_supplied','CNY',0,0)")
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,scrap_quantity,status,completion_date,unit_price,supply_mode,currency,tax_inclusive,production_quantity) VALUES(4,0,1,'SPLIT-HISTORY',10,0,'delivered','2026-04-01',5,'customer_supplied','CNY',0,0)")
 	firstHistory := `{"order_item_id":4,"qualified_quantity":4,"business_date":"2026-04-01","expected_price":"5","confirmed_price":"3.3333","source_ref":"QC-4-A","notes":"review first batch","reviewed":true}`
 	call(h.ImportHistory, firstHistory, nil, "/", 200)
 	call(h.ImportHistory, firstHistory, nil, "/", 200)
@@ -172,7 +190,7 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 	t.Log("historical split months, remaining quantity, per-batch audited price, source reference replay and full-audit removal passed")
 
 	// Production buffers absorb scrap, but never create extra contracted revenue.
-	exec("INSERT INTO order_items VALUES(5,0,1,'BUFFER',100,5,'processing',NULL,10,'self_purchased','CNY',0,110)")
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,scrap_quantity,status,completion_date,unit_price,supply_mode,currency,tax_inclusive,production_quantity) VALUES(5,0,1,'BUFFER',100,5,'processing',NULL,10,'self_purchased','CNY',0,110)")
 	buffer := gin.Params{{Key: "itemId", Value: "5"}}
 	bufferFirst := call(h.CreateCompletion, `{"qualified_quantity":80,"business_date":"2026-06-01","request_id":"buffer-first"}`, buffer, "/", 200)["data"].(map[string]interface{})
 	if bufferFirst["billable_quantity"] != "80.000" || bufferFirst["output_value"] != "800.00" {
@@ -194,7 +212,7 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 		t.Fatal("reserve-only batch created income")
 	}
 	// Scrap does not reduce a customer's delivery target.
-	exec("INSERT INTO order_items VALUES(6,0,1,'SCRAP-SHORTAGE',10,2,'processing',NULL,10,'customer_supplied','CNY',0,10)")
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,scrap_quantity,status,completion_date,unit_price,supply_mode,currency,tax_inclusive,production_quantity) VALUES(6,0,1,'SCRAP-SHORTAGE',10,2,'processing',NULL,10,'customer_supplied','CNY',0,10)")
 	shortage := gin.Params{{Key: "itemId", Value: "6"}}
 	call(h.CreateCompletion, `{"qualified_quantity":8,"business_date":"2026-09-01"}`, shortage, "/", 200)
 	var shortageStatus string
@@ -204,7 +222,7 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 	exec("UPDATE order_items SET production_quantity=12 WHERE id=6")
 	call(h.CreateCompletion, `{"qualified_quantity":2,"business_date":"2026-09-02"}`, shortage, "/", 200)
 	// The history route uses the same cap and spare split.
-	exec("INSERT INTO order_items VALUES(7,0,1,'BUFFER-HISTORY',10,0,'delivered','2026-09-01',2,'customer_supplied','CNY',0,12)")
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,scrap_quantity,status,completion_date,unit_price,supply_mode,currency,tax_inclusive,production_quantity) VALUES(7,0,1,'BUFFER-HISTORY',10,0,'delivered','2026-09-01',2,'customer_supplied','CNY',0,12)")
 	call(h.ImportHistory, `{"order_item_id":7,"qualified_quantity":12,"business_date":"2026-09-01","expected_price":"2","reviewed":true,"notes":"verified count including two spare parts","source_ref":"BUFFER-HISTORY-1"}`, nil, "/", 200)
 	var historical struct {
 		Billable string
@@ -240,7 +258,7 @@ func TestFinanceIntegrationTemporaryTables(t *testing.T) {
 	call(h.CreateCompletion, `{"qualified_quantity":1,"business_date":"2026-03-02"}`, item, "/", 403)
 	roleType = "user"
 	userID = 1
-	exec("INSERT INTO order_items VALUES(3,0,1,'PERMISSION',2,0,'processing',NULL,12.3456,'self_purchased','CNY',0,0)")
+	exec("INSERT INTO order_items(id,corp_id,order_id,part_name,quantity,scrap_quantity,status,completion_date,unit_price,supply_mode,currency,tax_inclusive,production_quantity) VALUES(3,0,1,'PERMISSION',2,0,'processing',NULL,12.3456,'self_purchased','CNY',0,0)")
 	permissionItem := gin.Params{{Key: "itemId", Value: "3"}}
 	body := `{"qualified_quantity":1,"business_date":"2026-03-02","request_id":"production-permission"}`
 	masked := call(h.CreateCompletion, body, permissionItem, "/", 200)["data"].(map[string]interface{})

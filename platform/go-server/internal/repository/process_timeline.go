@@ -8,9 +8,17 @@ import (
 	"time"
 )
 
-var ErrTimedProcess = errors.New("工序已有实际时间记录，不能直接回退或删除；请在工序时间节点中填写原因更正")
+var ErrTimedProcess = errors.New("工序已有实际时间记录，不能直接回退或删除；请在工序时间节点中更正")
 
 func processNodes(p models.OrderProcess) string {
+	// Compare the same instant consistently even when the database and input use different zones.
+	utc := func(value *time.Time) *time.Time {
+		if value == nil {
+			return nil
+		}
+		node := value.UTC()
+		return &node
+	}
 	b, _ := json.Marshal(struct {
 		CuttingSpec     *string              `json:"cutting_spec"`
 		RetiredBeforeID *int64               `json:"retired_before_id"`
@@ -23,7 +31,7 @@ func processNodes(p models.OrderProcess) string {
 		PlannedEnd      *time.Time           `json:"planned_end_at"`
 		ActualStart     *time.Time           `json:"actual_start_at"`
 		ActualEnd       *time.Time           `json:"actual_end_at"`
-	}{p.CuttingSpec, p.RetiredBeforeID, p.DeletedAt, p.Name, p.SortOrder, p.IsOutsourced, p.Status, p.PlannedStartAt, p.PlannedEndAt, p.ActualStartAt, p.ActualEndAt})
+	}{p.CuttingSpec, p.RetiredBeforeID, p.DeletedAt, p.Name, p.SortOrder, p.IsOutsourced, p.Status, utc(p.PlannedStartAt), utc(p.PlannedEndAt), utc(p.ActualStartAt), utc(p.ActualEndAt)})
 	return string(b)
 }
 

@@ -1,7 +1,8 @@
+import { reconciliationSources, reconciliationRowContext, reconciliationWorkbook } from '../features/accounting/reconciliationPreview';
 import PrintTemplateFieldButtons from './PrintTemplateFieldButtons';
 import { printItemFields as itemFields } from '../configs/printTemplateFields';
 import { formatAmount } from '../utils/money';
-import React, { useState, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { X, Info, Download } from 'lucide-react';
 import { Order } from '../types';
 import { authFetch } from './shared';
@@ -24,6 +25,7 @@ interface ReconciliationPreviewModalProps {
   mode?: 'preview' | 'config';
   title?: string;
   orderData?: any;
+  reconciliationDate?: string;
   onClose: () => void;
 }
 
@@ -43,6 +45,7 @@ const orderFields = [
 
 // 其他字段列表（计算字段）- 对账单专用
 const otherFields = [
+  { key: 'other.reconciliation_date', label: '本次对账日期' },
   { key: 'other.small_total', label: '小写总计' },
   { key: 'other.big_total', label: '大写总计' },
   { key: 'other.total_quantity', label: '总数量' },
@@ -55,11 +58,13 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
   mode = 'config',
   title = '对账单',
   orderData,
+  reconciliationDate,
   onClose
 }) => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const univerRef = useRef<any>(null);
-  const { workbook: sheetData, error: templateError } = usePrintWorkbook(template?.template);
+  const { workbook: originalSheet, error: templateError } = usePrintWorkbook(template?.template);
+  const sheetData = useMemo(() => mode === 'preview' ? reconciliationWorkbook(originalSheet, reconciliationDate) : originalSheet, [originalSheet, reconciliationDate, mode]);
   // 使用 Univer API 填充数据
   const fillDataWithUniverAPI = () => {
     if (!univerRef.current || !orderData) {
@@ -98,6 +103,8 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
       };
     }
 
+    mergedOrderData = { ...mergedOrderData, other: { ...mergedOrderData.other, reconciliation_date: reconciliationDate || '' } };
+    const sources = reconciliationSources(orders);
     const items = mergedOrderData.items || [];
 
     // 1. 查找零件模板行
@@ -139,7 +146,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
         newValue = replaceItemPlaceholders(newValue, item);
 
         // 替换订单占位符 {{order.xxx}} {{other.xxx}}
-        newValue = replaceReconciliationOrderPlaceholders(newValue, mergedOrderData);
+        newValue = replaceReconciliationOrderPlaceholders(newValue, reconciliationRowContext(mergedOrderData, item.id, sources, (orders?.length || 0) > 1));
 
         if (newValue !== cellValue) {
           try {
@@ -271,13 +278,13 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
 
   usePrintPreview(mode, orderData, sheetData, univerRef, fillDataWithUniverAPI);
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
+    <div data-escape-dialog className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
       <div className="bg-white rounded-2xl shadow-xl w-[95vw] h-[90vh] overflow-hidden flex flex-col relative">
         {templateError && <p role="alert" className="bg-rose-50 p-3 text-sm text-rose-700">{templateError}</p>}
         {/* 头部 */}
-        <div className="p-4 border-b border-zinc-200 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <h3 className="text-xl font-bold text-zinc-900">{title}</h3>
+        <div className="p-4 border-b border-zinc-200 flex flex-wrap gap-2 justify-between items-center">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="text-xl font-bold text-zinc-900">{title}</h3>{mode === 'preview' && reconciliationDate && <span className="text-sm text-slate-500">对账日期：{reconciliationDate}</span>}
             {orders && orders.length > 0 && (
               <span className="text-sm text-zinc-500">
                 {orders.length === 1
@@ -304,7 +311,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
                 保存模板
               </button>
             )}
-            <button
+            <button data-escape-close
               onClick={onClose}
               className="text-zinc-400 hover:text-zinc-600 p-2"
             >
@@ -412,7 +419,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
 
       {/* Toast提示 */}
       {toast && (
-        <div
+        <div data-escape-dialog
           className={`fixed inset-0 z-[200] flex items-center justify-center bg-black/30 animate-in fade-in duration-200`}
         >
           <div
@@ -431,7 +438,7 @@ const ReconciliationPreviewModal: React.FC<ReconciliationPreviewModalProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             )}
-            <span className="font-medium text-lg">{toast.message}</span>
+            <span className="font-medium text-lg">{toast.message}</span><button type="button" data-escape-close aria-label="关闭提示" className="ml-2 text-xl" onClick={()=>setToast(null)}>×</button>
           </div>
         </div>
       )}

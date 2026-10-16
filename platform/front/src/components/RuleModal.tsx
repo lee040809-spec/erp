@@ -112,7 +112,7 @@ const RuleModal: React.FC<RuleModalProps> = ({
                       </button>
                     );
     return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+    <div data-escape-dialog className="fixed inset-0 z-[130] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -128,7 +128,7 @@ const RuleModal: React.FC<RuleModalProps> = ({
       >
         <div className="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
           <h3 className="text-xl font-bold">{editingRuleId ? '修改规则' : '新建规则'}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full">
+          <button data-escape-close onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -388,7 +388,7 @@ const RuleModal: React.FC<RuleModalProps> = ({
           )}
 
           <div className="pt-2 flex gap-3">
-            <button
+            <button data-escape-close
               type="button"
               onClick={onClose}
               className="flex-1 px-6 py-3 border border-zinc-200 text-zinc-600 rounded-2xl font-bold hover:bg-zinc-50 transition-colors"

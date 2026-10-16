@@ -445,7 +445,7 @@ const UserManagement: React.FC<UserManagementProps> = () => {
 
       {/* User Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
             <div className="px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">{editingUser ? '编辑用户' : '新建用户'}</h3>
@@ -514,7 +514,7 @@ const UserManagement: React.FC<UserManagementProps> = () => {
                 </select>
               </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <button data-escape-close
                   type="button"
                   onClick={() => setShowModal(false)}
                   className="flex-1 px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
@@ -535,12 +535,12 @@ const UserManagement: React.FC<UserManagementProps> = () => {
 
       {/* Delete Confirm Modal */}
       {showDeleteConfirm && deletingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
             <h3 className="text-lg font-bold mb-4">确认删除</h3>
             <p className="text-zinc-600 mb-6">确定要删除用户 "{deletingUser.name}" 吗？此操作不可恢复。</p>
             <div className="flex gap-3">
-              <button
+              <button data-escape-close
                 onClick={() => { setShowDeleteConfirm(false); setDeletingUser(null); }}
                 className="flex-1 px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
               >
@@ -559,7 +559,7 @@ const UserManagement: React.FC<UserManagementProps> = () => {
 
       {/* Reset Password Modal */}
       {showResetPassword && resettingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
             <h3 className="text-lg font-bold mb-4">重置密码</h3>
             <p className="text-zinc-600 mb-4">为用户 "{resettingUser.name}" 设置新密码</p>
@@ -571,7 +571,7 @@ const UserManagement: React.FC<UserManagementProps> = () => {
               className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 mb-4"
             />
             <div className="flex gap-3">
-              <button
+              <button data-escape-close
                 onClick={() => { setShowResetPassword(false); setResettingUser(null); setNewPassword(''); }}
                 className="flex-1 px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
               >
@@ -591,7 +591,7 @@ const UserManagement: React.FC<UserManagementProps> = () => {
 
       {/* Bind Role Modal */}
       {showBindRoleModal && bindingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4">
             <div className="px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">绑定角色 - {bindingUser.name}</h3>
@@ -661,7 +661,7 @@ const UserManagement: React.FC<UserManagementProps> = () => {
               </div>
             </div>
             <div className="px-6 py-4 border-t border-zinc-200">
-              <button
+              <button data-escape-close
                 onClick={() => { setShowBindRoleModal(false); setBindingUser(null); }}
                 className="w-full px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
               >

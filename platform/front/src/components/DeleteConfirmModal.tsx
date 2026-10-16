@@ -20,7 +20,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+    <div data-escape-dialog className="fixed inset-0 z-[140] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -41,7 +41,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           <h3 className="text-lg font-bold text-zinc-900 mb-2">{title}</h3>
           <p className="text-zinc-500 text-sm mb-6">{message}</p>
           <div className="flex gap-3">
-            <button
+            <button data-escape-close
               onClick={onClose}
               className="flex-1 px-4 py-2 border border-zinc-200 rounded-xl text-zinc-600 hover:bg-zinc-50 transition-colors"
             >

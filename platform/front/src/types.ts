@@ -115,6 +115,8 @@ export interface Reconciliation {
     delivered_amount: number;
 }
 export interface MonthlyFinanceSummary {
+    order_amount?: string;
+    order_costs?: OrderCostTotals;
     month: string;
     billable_quantity: string;
     reserve_quantity: string;
@@ -131,12 +133,20 @@ export interface MonthlyFinanceSummary {
     closing_status: 'open' | 'closed';
 }
 export interface AnnualFinanceSummary {
+    order_amount?: string;
     year: string;
     output_value: string;
     production_cost: string;
     production_profit: string;
     period_expense: string;
     operating_profit: string;
+}
+export interface OrderCostTotals {
+    material?: string | number;
+    outsourcing?: string | number;
+    tool?: string | number;
+    fixture?: string | number;
+    other?: string | number;
 }
 export interface FinanceSummaryResponse {
     pending_cost_amount?: string;

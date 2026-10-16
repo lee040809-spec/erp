@@ -83,14 +83,14 @@ const CompletionModal: React.FC<CompletionModalProps> = ({ item, onClose, onSucc
             setSaving(false);
         }
     };
-    return (<div className={embedded ? "erp-workflow-embedded" : "fixed inset-0 z-[110] bg-black/40 flex items-center justify-center p-4"} onMouseDown={event => !embedded && !saving && event.target === event.currentTarget && onClose()}>
+    return (<div data-escape-dialog={embedded ? undefined : true} data-escape-blocked={saving} className={embedded ? "erp-workflow-embedded" : "fixed inset-0 z-[110] bg-black/40 flex items-center justify-center p-4"} onMouseDown={event => !embedded && !saving && event.target === event.currentTarget && onClose()}>
       <div className={embedded ? "bg-white w-full" : "bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl border border-zinc-200"}>
         {!embedded && <div className="px-5 py-4 border-b border-zinc-200 flex items-start justify-between">
           <div>
             <h3 className="font-bold text-lg">确认合格完工</h3>
             <p className="text-sm text-zinc-500 mt-1">{item.part_name} · {item.part_number || '无图号'}</p>
           </div>
-          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-900"><X className="w-5 h-5"/></button>
+          <button data-escape-close onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-900"><X className="w-5 h-5"/></button>
         </div>}
 
         {loading ? (<div className="h-56 flex items-center justify-center text-zinc-400"><Loader2 className="w-5 h-5 animate-spin mr-2"/>正在读取完工记录</div>) : (<form onSubmit={submit} className="p-5 space-y-5">
@@ -115,7 +115,7 @@ const CompletionModal: React.FC<CompletionModalProps> = ({ item, onClose, onSucc
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              {!embedded && <button type="button" onClick={onClose} disabled={saving} className="h-10 px-4 border border-zinc-300 text-sm font-medium hover:bg-zinc-50">取消</button>}
+              {!embedded && <button data-escape-close type="button" onClick={onClose} disabled={saving} className="h-10 px-4 border border-zinc-300 text-sm font-medium hover:bg-zinc-50">取消</button>}
               <button type="submit" disabled={saving || !info || info.remaining_quantity <= 0} className="h-10 px-4 bg-zinc-900 text-white text-sm font-medium flex items-center gap-2 hover:bg-zinc-800 disabled:opacity-40">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-4 h-4"/>}确认合格完工
               </button>

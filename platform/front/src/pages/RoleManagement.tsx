@@ -364,7 +364,7 @@ const RoleManagement: React.FC = () => {
 
       {/* Role Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
             <div className="px-6 py-4 border-b border-zinc-200">
               <h3 className="text-lg font-bold">{editingRole ? '编辑角色' : '新建角色'}</h3>
@@ -393,7 +393,7 @@ const RoleManagement: React.FC = () => {
                 </select>
               </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <button data-escape-close
                   type="button"
                   onClick={() => setShowModal(false)}
                   className="flex-1 px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
@@ -414,12 +414,12 @@ const RoleManagement: React.FC = () => {
 
       {/* Delete Confirm Modal */}
       {showDeleteConfirm && deletingRole && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
             <h3 className="text-lg font-bold mb-4">确认删除</h3>
             <p className="text-zinc-600 mb-6">确定要删除角色 "{deletingRole.name}" 吗？此操作不可恢复。</p>
             <div className="flex gap-3">
-              <button
+              <button data-escape-close
                 onClick={() => { setShowDeleteConfirm(false); setDeletingRole(null); }}
                 className="flex-1 px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
               >
@@ -438,11 +438,11 @@ const RoleManagement: React.FC = () => {
 
       {/* Permission Binding Modal */}
       {showPermissionModal && bindingRole && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div data-escape-dialog className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[80vh] flex flex-col">
             <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between">
               <h3 className="text-lg font-bold">绑定资源 - {bindingRole.name}</h3>
-              <button
+              <button data-escape-close
                 onClick={() => { setShowPermissionModal(false); setBindingRole(null); setPermissions([]); setAllResources([]); }}
                 className="text-zinc-400 hover:text-zinc-600"
               >
@@ -533,7 +533,7 @@ const RoleManagement: React.FC = () => {
             )}
 
             <div className="px-6 py-4 border-t border-zinc-200">
-              <button
+              <button data-escape-close
                 onClick={() => { setShowPermissionModal(false); setBindingRole(null); setPermissions([]); setAllResources([]); }}
                 className="w-full px-4 py-2 border border-zinc-200 rounded-xl text-sm font-medium hover:bg-zinc-50 transition-colors"
               >

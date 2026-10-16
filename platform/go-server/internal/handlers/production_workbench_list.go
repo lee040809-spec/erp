@@ -11,6 +11,7 @@ import (
 	"machining-erp/internal/repository"
 	"machining-erp/pkg/database"
 	"machining-erp/pkg/response"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -116,7 +117,13 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		}
 	}
 
+	showCosts := canViewOrderAmounts(h.db, c)
 	type row struct {
+		EnteredMaterial    string                     `json:"-"`
+		EnteredTool        string                     `json:"-"`
+		EnteredFixture     string                     `json:"-"`
+		EnteredOther       string                     `json:"-"`
+		OrderCosts         *models.OrderCostTotals    `gorm:"-" json:"order_costs,omitempty"`
 		Flow               productionflow.Summary     `gorm:"-" json:"flow"`
 		ItemID             int64                      `json:"item_id"`
 		OrderID            int64                      `json:"order_id"`
@@ -152,6 +159,9 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 	selectSQL := `SELECT i.id AS item_id,o.id AS order_id,o.order_number,COALESCE(o.customer_short_name,o.customer_name,'') AS customer_name,i.part_name,COALESCE(i.part_number,'') AS part_number,o.priority,i.status,i.quantity,COALESCE(NULLIF(i.production_quantity,0),i.quantity) AS production_quantity, COALESCE(q.billable_quantity,0) AS billable_quantity, COALESCE(q.qualified_quantity,0)-COALESCE(q.billable_quantity,0) AS reserve_quantity, GREATEST(i.quantity-COALESCE(q.qualified_quantity,0),0) AS delivery_gap,COALESCE(i.scrap_quantity,0) AS scrap_quantity,COALESCE(q.qualified_quantity,0) AS qualified_quantity,GREATEST(COALESCE(NULLIF(i.production_quantity,0),i.quantity)-COALESCE(i.scrap_quantity,0)-COALESCE(q.qualified_quantity,0),0) AS remaining_quantity,COALESCE(DATE_FORMAT(i.due_date,'%Y-%m-%d'),'') AS due_date,
  COALESCE(DATE_FORMAT(COALESCE(i.start_date,o.start_date),'%Y-%m-%d'),'') AS start_date,COALESCE(pp.assignee,'') AS assignee,COALESCE(pp.equipment,'') AS equipment,COALESCE(DATE_FORMAT(pp.planned_start,'%Y-%m-%d'),'') AS planned_start,COALESCE(DATE_FORMAT(pp.planned_end,'%Y-%m-%d'),'') AS planned_end,COALESCE(CAST(pp.estimated_hours AS CHAR),'0.00') AS estimated_hours,COALESCE(pp.blocked_reason,'') AS blocked_reason,COALESCE(pp.notes,'') AS notes,0 AS has_drawing`
 	selectSQL += "," + drawings.CountSQL("i") + " AS drawing_count"
+	if showCosts {
+		selectSQL += workbenchOrderCostColumns
+	}
 	queryArgs := append(append([]interface{}{}, args...), size, offset)
 	err := h.db.Raw(selectSQL+base+` ORDER BY COALESCE(i.start_date,o.start_date) DESC,o.id DESC,i.id DESC LIMIT ? OFFSET ?`, queryArgs...).Scan(&rows).Error
 	if err != nil {
@@ -171,7 +181,11 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 			if len(ids) == 0 {
 				return nil
 			}
-			return db.Select("id,order_item_id,corp_id,name,is_outsourced,status,sort_order,planned_start_at,planned_end_at,actual_start_at,actual_end_at").Where("corp_id=? AND order_item_id IN ?", corp, ids).Order("sort_order,id").Find(&processes).Error
+			fields := "id,order_item_id,corp_id,name,is_outsourced,status,sort_order,planned_start_at,planned_end_at,actual_start_at,actual_end_at"
+			if showCosts {
+				fields += ",outsourcing_fee"
+			}
+			return db.Select(fields).Where("corp_id=? AND order_item_id IN ?", corp, ids).Order("sort_order,id").Find(&processes).Error
 		},
 		func(db *gorm.DB) error {
 			var e error
@@ -190,6 +204,15 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		processesByItem[process.OrderItemID] = append(processesByItem[process.OrderItemID], process)
 	}
 	for n := range rows {
+		if showCosts {
+			cost := models.OrderCostTotals{Material: rows[n].EnteredMaterial, Outsourcing: "0.00", Tool: rows[n].EnteredTool, Fixture: rows[n].EnteredFixture, Other: rows[n].EnteredOther}
+			for _, process := range processesByItem[rows[n].ItemID] {
+				if process.IsOutsourced && process.Name != "送货" {
+					cost.Outsourcing = decimalAdd(cost.Outsourcing, strconv.FormatFloat(process.OutsourcingFee, 'f', 2, 64))
+				}
+			}
+			rows[n].OrderCosts = &cost
+		}
 		rows[n].HasDrawing = rows[n].DrawingCount > 0
 		rows[n].Flow = flows[rows[n].ItemID]
 		rows[n].Delivery = deliveries[rows[n].ItemID]

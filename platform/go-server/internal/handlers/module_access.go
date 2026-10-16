@@ -16,9 +16,30 @@ func checkModuleAccess(db *gorm.DB, c *gin.Context, keys ...string) (bool, error
 	if middleware.GetRoleType(c) == "admin" {
 		return true, nil
 	}
-	var count int64
-	err := db.Table("users u").Joins("JOIN permissions p ON p.role_id=u.role_id AND p.corp_id=u.corp_id").Joins("JOIN resources r ON r.id=p.resource_id").Where("u.id=? AND u.corp_id=? AND r.resource_key IN ?", middleware.GetUserID(c), middleware.GetCorpID(c), keys).Count(&count).Error
-	return err == nil && count > 0, err
+	// Reuse one successful permission read within this request only. A new
+	// request always rechecks the database, so role edits take effect immediately.
+	value, loaded := c.Get("moduleAccessKeys")
+	var granted map[string]bool
+	if loaded {
+		granted = value.(map[string]bool)
+	} else {
+		var resourceKeys []string
+		err := db.Table("users u").Joins("JOIN permissions p ON p.role_id=u.role_id AND p.corp_id=u.corp_id").Joins("JOIN resources r ON r.id=p.resource_id").Where("u.id=? AND u.corp_id=?", middleware.GetUserID(c), middleware.GetCorpID(c)).Distinct().Pluck("r.resource_key", &resourceKeys).Error
+		if err != nil {
+			return false, err
+		}
+		granted = map[string]bool{}
+		for _, key := range resourceKeys {
+			granted[key] = true
+		}
+		c.Set("moduleAccessKeys", granted)
+	}
+	for _, key := range keys {
+		if granted[key] {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 func requireModuleAccess(db *gorm.DB, c *gin.Context, keys ...string) bool {
 	allowed, err := checkModuleAccess(db, c, keys...)

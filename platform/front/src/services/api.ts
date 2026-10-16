@@ -21,13 +21,6 @@ export const fetchCustomersApi = async (): Promise<Customer[]> => {
   return Array.isArray(result.data) ? result.data : (Array.isArray(result) ? result : []);
 };
 
-// 获取财务数据
-export const fetchFinanceApi = async (): Promise<any[]> => {
-  const res = await authFetch('/api/platform/finance/reconciliation');
-  const result = await res.json();
-  return Array.isArray(result.data) ? result.data : (Array.isArray(result) ? result : []);
-};
-
 export const fetchFinanceSummaryApi = async (year: string): Promise<FinanceSummaryResponse> => {
   const res = await authFetch(`/api/platform/finance/summary?year=${encodeURIComponent(year)}`);
   const result = await res.json();

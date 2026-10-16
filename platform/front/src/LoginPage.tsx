@@ -412,7 +412,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
         {/* 错误弹窗 */}
         {showErrorModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div data-escape-dialog className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-700">
               {/* Modal Header */}
               <div className="flex items-center justify-between mb-4">
@@ -423,7 +423,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   <h3 className="text-lg font-semibold text-white">提示</h3>
                 </div>
                 <button
-                  onClick={closeErrorModal}
+                  data-escape-close onClick={closeErrorModal}
                   className="text-slate-400 hover:text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -442,7 +442,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
               {/* Close Button */}
               <button
-                onClick={closeErrorModal}
+                data-escape-close onClick={closeErrorModal}
                 className="w-full py-2.5 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-medium transition-all"
               >
                 确定

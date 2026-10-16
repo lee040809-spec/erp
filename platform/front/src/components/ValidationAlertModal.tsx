@@ -18,7 +18,7 @@ const ValidationAlertModal: React.FC<ValidationAlertModalProps> = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[700] flex items-center justify-center p-4">
+    <div data-escape-dialog className="fixed inset-0 z-[700] flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -40,7 +40,7 @@ const ValidationAlertModal: React.FC<ValidationAlertModalProps> = ({
             <h3 className="text-xl font-bold text-zinc-900">{title}</h3>
             <p className="text-sm text-zinc-500 font-medium leading-relaxed">{show}</p>
           </div>
-          <button
+          <button data-escape-close
             onClick={onClose}
             className="w-full mt-4 px-6 py-3 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-colors shadow-lg shadow-zinc-200"
           >

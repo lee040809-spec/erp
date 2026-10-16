@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "node scripts/verify-order-prices.cjs && node scripts/verify-process-route.cjs && node scripts/verify-delivery-entry.cjs && node scripts/verify-part-workflow.cjs && node scripts/verify-module-quality.cjs && node scripts/verify-ui-feedback.cjs && tsx --tsconfig tsconfig.json scripts/check-process-day-chart.tsx && tsx --tsconfig tsconfig.json scripts/verify-read-requests.ts"
+    "test": "node scripts/verify-order-prices.cjs && node scripts/verify-process-route.cjs && node scripts/verify-delivery-entry.cjs && node scripts/verify-part-workflow.cjs && node scripts/verify-module-quality.cjs && node scripts/verify-ui-feedback.cjs && node scripts/verify-interaction-guards.cjs && node scripts/verify-dialog-escape.cjs && node scripts/verify-accounting-flows.cjs && tsx --tsconfig tsconfig.json scripts/check-process-day-chart.tsx && tsx --tsconfig tsconfig.json scripts/verify-read-requests.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

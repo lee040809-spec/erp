@@ -1,4 +1,5 @@
 import DrawingButton from '../features/drawings/DrawingButton';
+import PartCostSummary from '../features/accounting/PartCostSummary';
 
 import { ArrowUpRight, CalendarDays, CheckCircle2, SlidersHorizontal, UserRound } from 'lucide-react';
 import { StatusBadge } from './shared';
@@ -68,6 +69,7 @@ export default function WorkbenchTaskCard(p: Props) {
         {steps.map(step => <span key={step.id} className={`erp-step erp-step-${step.status}`}>{step.status === 'completed' && <CheckCircle2 size={12}/>}<span>{step.name}</span>{step.is_outsourced && <span className="text-[10px] opacity-70">外协</span>}</span>)}
       </div>
     </div>
+    {task.order_costs && <PartCostSummary costs={task.order_costs}/>}
     {task.notes && <p className="mt-2 text-xs text-slate-400 whitespace-pre-wrap">{task.notes}</p>}
   </article>;
 }

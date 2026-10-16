@@ -244,7 +244,7 @@ const DeliveryPreviewModal: React.FC<DeliveryPreviewModalProps> = ({ order, temp
         }
     };
   usePrintPreview(mode, orderData, sheetData, univerRef, fillDataWithUniverAPI);
-    return (<div className="fixed inset-0 bg-black/50 z-[125] flex items-center justify-center">
+    return (<div data-escape-dialog className="fixed inset-0 bg-black/50 z-[125] flex items-center justify-center">
       <div className="bg-white rounded-2xl shadow-xl w-[95vw] h-[90vh] overflow-hidden flex flex-col relative">
         {templateError && <p role="alert" className="bg-rose-50 p-3 text-sm text-rose-700">{templateError}</p>}
         {/* 头部 */}
@@ -262,7 +262,7 @@ const DeliveryPreviewModal: React.FC<DeliveryPreviewModalProps> = ({ order, temp
             {mode === 'config' && (<button onClick={handleSaveTemplate} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors">
                 保存模板
               </button>)}
-            <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 p-2">
+            <button data-escape-close onClick={onClose} className="text-zinc-400 hover:text-zinc-600 p-2">
               <X className="w-5 h-5"/>
             </button>
           </div>
@@ -348,7 +348,7 @@ const DeliveryPreviewModal: React.FC<DeliveryPreviewModalProps> = ({ order, temp
       </div>
 
       {/* Toast提示 */}
-      {toast && (<div className={`fixed inset-0 z-[200] flex items-center justify-center bg-black/30 animate-in fade-in duration-200`}>
+      {toast && (<div data-escape-dialog className={`fixed inset-0 z-[200] flex items-center justify-center bg-black/30 animate-in fade-in duration-200`}>
           <div className={`px-8 py-4 rounded-xl shadow-xl flex items-center gap-3 animate-in zoom-in duration-300 ${toast.type === 'success'
                 ? 'bg-emerald-500 text-white'
                 : 'bg-red-500 text-white'}`}>
@@ -357,7 +357,7 @@ const DeliveryPreviewModal: React.FC<DeliveryPreviewModalProps> = ({ order, temp
               </svg>) : (<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
               </svg>)}
-            <span className="font-medium text-lg">{toast.message}</span>
+            <span className="font-medium text-lg">{toast.message}</span><button type="button" data-escape-close aria-label="关闭提示" className="ml-2 text-xl" onClick={()=>setToast(null)}>×</button>
           </div>
         </div>)}
     </div>);

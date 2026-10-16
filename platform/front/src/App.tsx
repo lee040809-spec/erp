@@ -14,9 +14,10 @@ import { createEmptyFilters, createOrderFilters } from './configs/filterConfigs'
 import { formatDate, authFetch } from './components/shared';
 import { NAV_ITEMS, withOperationalMenus } from './constants/navigation';
 import { useOrders } from './hooks/useOrders';
+import { useDialogEscape } from './hooks/useDialogEscape';
 import { canEditOrderPrices } from './utils/orderAmounts';
 import * as LucideIcons from 'lucide-react';
-import { fetchOrdersApi, fetchCustomersApi, fetchDashboardDataApiNew, fetchInventoryDataApi, fetchFinanceApi, fetchRulesApi, deleteOrderApi, createRuleApi, updateRuleApi, deleteRuleApi } from './services/api';
+import { fetchOrdersApi, fetchCustomersApi, fetchDashboardDataApiNew, fetchInventoryDataApi, fetchRulesApi, deleteOrderApi, createRuleApi, updateRuleApi, deleteRuleApi } from './services/api';
 // 懒加载页面组件
 const Orders = lazy(() => import('./pages/Orders'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -61,6 +62,7 @@ declare global {
     }
 }
 export default function App() {
+    useDialogEscape();
     // Auth state
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [authUser, setAuthUser] = useState<{
@@ -194,7 +196,6 @@ export default function App() {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [materials, setMaterials] = useState<Material[]>([]);
     const [remnants, setRemnants] = useState<Remnant[]>([]);
-    const [reconciliation, setReconciliation] = useState<any[]>([]);
     const [adventRules, setAdventRules] = useState<any[]>([]);
     const [printTemplates, setPrintTemplates] = useState<any[]>([]);
     const [showRuleModal, setShowRuleModal] = useState(false);
@@ -454,16 +455,6 @@ export default function App() {
             console.error("Failed to fetch inventory data", error);
         }
     };
-    // 获取财务数据
-    const fetchFinanceData = async () => {
-        try {
-            const data = await fetchFinanceApi();
-            setReconciliation(data);
-        }
-        catch (error) {
-            console.error("Failed to fetch finance data", error);
-        }
-    };
     // 获取规则数据
     const fetchRulesData = async () => {
         try {
@@ -563,7 +554,6 @@ export default function App() {
             case 'reconciliation':
                 setOrders([]);
                 setReconciliationPage(1);
-                fetchOrdersData(undefined, 'completed');
                 if (customers.length === 0)
                     fetchCustomersData();
                 break;
@@ -578,8 +568,6 @@ export default function App() {
                 break;
             case 'finance':
             case 'monthly_output':
-                setReconciliation([]);
-                fetchFinanceData();
                 break;
             case 'advent_rules':
                 setAdventRules([]);
@@ -591,36 +579,14 @@ export default function App() {
                 break;
         }
     }, [activeTab, isAuthenticated]);
-    // Order pages own filtered pagination; avoid a second unfiltered request overwriting it.
-    const fetchData = async () => {
-        setIsLoading(true);
-        try {
-            const [ordersRes, customersRes, materialsRes, remnantsRes, financeRes] = await Promise.all([
-                authFetch('/api/platform/orders'),
-                authFetch('/api/platform/customers'),
-                authFetch('/api/platform/materials'),
-                authFetch('/api/platform/remnants'),
-                authFetch('/api/platform/finance/reconciliation')
-            ]);
-            const ordersData = await ordersRes.json();
-            setOrders(Array.isArray(ordersData.data) ? ordersData.data : Array.isArray(ordersData) ? ordersData : []);
-            if (ordersData.total)
-                setOrderTotal(ordersData.total);
-            const customersData = await customersRes.json();
-            setCustomers(Array.isArray(customersData) ? customersData : []);
-            const materialsData = await materialsRes.json();
-            setMaterials(Array.isArray(materialsData) ? materialsData : []);
-            const remnantsData = await remnantsRes.json();
-            setRemnants(Array.isArray(remnantsData) ? remnantsData : []);
-            const financeData = await financeRes.json();
-            setReconciliation(Array.isArray(financeData) ? financeData : []);
-        }
-        catch (error) {
-            console.error("Failed to fetch data", error);
-        }
-        finally {
-            setIsLoading(false);
-        }
+    // Refresh only the visible order list, keeping its filters and pagination.
+    const refreshCurrentOrderList = () => {
+        if (['overdue_orders','production_overdue'].includes(activeTab)) return fetchOrdersWithFilters(overdueFilters,overduePage,overduePageSize,'overdue');
+        if (['warning_orders','production_warning'].includes(activeTab)) return fetchOrdersWithFilters(warningFilters,warningPage,warningPageSize,'warning');
+        if (['imminent_orders','production_imminent'].includes(activeTab)) return fetchOrdersWithFilters(imminentFilters,imminentPage,imminentPageSize,'near_due');
+        if (activeTab==='production_delivery') return fetchOrdersWithFilters({...deliveryFilters,status:'delivery_ready'},deliveryPage,deliveryPageSize);
+        if (activeTab==='reconciliation') return fetchOrdersWithFilters({...reconciliationFilters,status:'completed'},reconciliationPage,reconciliationPageSize);
+        return fetchOrdersWithFilters(appliedOrderFilters,currentPage,pageSize);
     };
     const orderRequestVersion = useRef(0);
     // 带筛选条件的订单查询
@@ -707,7 +673,7 @@ export default function App() {
                 contact_name: undefined,
                 items: [{ part_name: '', quantity: 1, unit_price: 0, total_price: 0, status: 'pending', processes: [] }]
             });
-            fetchData();
+            void refreshCurrentOrderList().catch(() => { setErrorTitle('订单已保存，列表未刷新'); setErrorMessage('订单已保存成功，请点击查询重新读取列表。'); setShowErrorModal(true); });
         }
         catch (error) {
             setErrorTitle('订单保存失败');
@@ -753,7 +719,7 @@ export default function App() {
             setShowCustomerModal(false);
             setNewCustomer({ name: '', short_name: '', contacts: [] });
             setEditingCustomer(null);
-            fetchData();
+            void fetchCustomersData();
         }
         catch (error: any) {
             console.error("Failed to save customer", error);
@@ -766,7 +732,7 @@ export default function App() {
         try {
             await authFetch(`/api/platform/customers/${id}`, { method: 'DELETE' });
             setDeletingCustomerId(null);
-            fetchData();
+            void fetchCustomersData();
         }
         catch (error) {
             console.error("Failed to delete customer", error);
@@ -835,8 +801,9 @@ export default function App() {
             case 'inventory':
                 return (<Inventory materials={materials} remnants={remnants}/>);
             case 'finance':
+                return (<Finance key="finance" mode="overview"/>);
             case 'monthly_output':
-                return (<Finance reconciliation={reconciliation}/>);
+                return (<Finance key="monthly-output" mode="output"/>);
             case 'advent_rules':
                 return (<Rules adventRules={adventRules} ruleFilters={ruleFilters} setRuleFilters={setRuleFilters} editingRuleId={editingRuleId} setEditingRuleId={setEditingRuleId} ruleForm={ruleForm} setRuleForm={setRuleForm} setShowRuleModal={setShowRuleModal} setDeletingRuleId={setDeletingRuleId} fetchData={fetchRulesData}/>);
             // 生产相关菜单 - 使用独立组件

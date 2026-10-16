@@ -167,7 +167,12 @@ func TestProcessTimelineTemporaryTables(t *testing.T) {
 	call(h.Save, body, "2", "2", "admin", 404)
 	call(h.Save, body, "1", "3", "admin", 400)
 	call(h.Save, `{"planned_end_at":"2026-08-30T10:00"}`, "1", "1", "admin", 400)
-	call(h.Save, `{"actual_start_at":"2026-09-01T08:00"}`, "1", "1", "admin", 400)
+	call(h.Save, `{"actual_start_at":"2026-09-01T08:00"}`, "1", "1", "admin", 200)
+	var optionalReasonEvent models.ProcessTimeEvent
+	check(db.Order("id DESC").First(&optionalReasonEvent).Error)
+	if optionalReasonEvent.Reason != "" || optionalReasonEvent.Source != "manual" {
+		t.Fatal("optional reason must preserve manual audit record")
+	}
 	call(h.Save, `{"actual_start_at":"2099-09-01T08:00","reason":"invalid"}`, "1", "1", "admin", 400)
 	start := "processing"
 	_, _, err = repo.UpdateProcessForCorp(0, 1, 1, &start, nil, nil, 1)
@@ -197,7 +202,7 @@ func TestProcessTimelineTemporaryTables(t *testing.T) {
 		t.Fatal("completed timing silently discarded")
 	}
 	call(h.Save, `{"actual_start_at":"2026-09-01T10:00","actual_end_at":"2026-08-31T08:00","reason":"invalid"}`, "1", "1", "admin", 400)
-	call(h.Save, `{"actual_start_at":"2026-09-01T08:00","actual_end_at":"2026-09-01T10:00","reason":"根据车间记录补录"}`, "1", "1", "admin", 200)
+	call(h.Save, `{"actual_start_at":"2026-09-01T08:00","actual_end_at":"2026-09-01T10:00","reason":"   "}`, "1", "1", "admin", 200)
 	check(db.First(&p, 1).Error)
 	if p.Status != models.ProcessStatusCompleted || p.PlannedStartAt == nil || p.OutsourcingFee != 100 {
 		t.Fatal("manual correction lost plan/status/cost")

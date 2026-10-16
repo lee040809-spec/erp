@@ -238,7 +238,7 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, type, onC
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div data-escape-dialog data-escape-blocked={passwordLoading || resetLoading || emailLoading} className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -248,7 +248,7 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, type, onC
             </div>
             <h3 className="text-lg font-semibold text-gray-900">{getTitle()}</h3>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button data-escape-close onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -351,7 +351,7 @@ const UserSettingsModal: React.FC<UserSettingsModalProps> = ({ isOpen, type, onC
                     : `发送至 ${resetResult.email} 失败：${resetResult.error || '邮件服务异常'}`
                   }
                 </p>
-                <button
+                <button data-escape-close
                   onClick={onClose}
                   className="w-full mt-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
                 >

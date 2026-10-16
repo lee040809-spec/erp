@@ -1,6 +1,7 @@
 import type { DashboardItem } from '../services/api';
 
 export interface ProductionTask extends DashboardItem {
+  order_costs?: import('../types').OrderCostTotals;
  flow?: import("./productionFlow").FlowSummary;
   customer_name: string;
   assignee: string;

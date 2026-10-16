@@ -55,27 +55,39 @@ type CostEntry struct {
 func (CostEntry) TableName() string { return "cost_entries" }
 
 type MonthlyFinanceSummary struct {
-	Month               string `json:"month"`
-	QualifiedQuantity   string `json:"qualified_quantity"`
-	BillableQuantity    string `json:"billable_quantity"`
-	ReserveQuantity     string `json:"reserve_quantity"`
-	CompletionCount     int64  `json:"completion_count"`
-	OutputValue         string `json:"output_value"`
-	MaterialCost        string `json:"material_cost"`
-	OutsourcingCost     string `json:"outsourcing_cost"`
-	OtherProductionCost string `json:"other_production_cost"`
-	ProductionCost      string `json:"production_cost"`
-	ProductionProfit    string `json:"production_profit"`
-	PeriodExpense       string `json:"period_expense"`
-	OperatingProfit     string `json:"operating_profit"`
-	ClosingStatus       string `json:"closing_status"`
+	OrderAmount         string          `json:"order_amount"`
+	OrderCosts          OrderCostTotals `json:"order_costs"`
+	Month               string          `json:"month"`
+	QualifiedQuantity   string          `json:"qualified_quantity"`
+	BillableQuantity    string          `json:"billable_quantity"`
+	ReserveQuantity     string          `json:"reserve_quantity"`
+	CompletionCount     int64           `json:"completion_count"`
+	OutputValue         string          `json:"output_value"`
+	MaterialCost        string          `json:"material_cost"`
+	OutsourcingCost     string          `json:"outsourcing_cost"`
+	OtherProductionCost string          `json:"other_production_cost"`
+	ProductionCost      string          `json:"production_cost"`
+	ProductionProfit    string          `json:"production_profit"`
+	PeriodExpense       string          `json:"period_expense"`
+	OperatingProfit     string          `json:"operating_profit"`
+	ClosingStatus       string          `json:"closing_status"`
 }
 
 type AnnualFinanceSummary struct {
+	OrderAmount      string `json:"order_amount"`
 	Year             string `json:"year"`
 	OutputValue      string `json:"output_value"`
 	ProductionCost   string `json:"production_cost"`
 	ProductionProfit string `json:"production_profit"`
 	PeriodExpense    string `json:"period_expense"`
 	OperatingProfit  string `json:"operating_profit"`
+}
+
+// Display reference from order entry; never added to actual cost allocations.
+type OrderCostTotals struct {
+	Material    string `json:"material"`
+	Outsourcing string `json:"outsourcing"`
+	Tool        string `json:"tool"`
+	Fixture     string `json:"fixture"`
+	Other       string `json:"other"`
 }
