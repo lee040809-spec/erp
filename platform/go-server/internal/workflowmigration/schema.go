@@ -14,6 +14,7 @@ var Columns = []Column{
 	{"outsourcing_dispatches", "scope", "VARCHAR(20) NOT NULL DEFAULT 'selected'"},
 }
 var Tables = []string{
+	RecordChangesDDL,
 	`CREATE TABLE IF NOT EXISTS outsourcing_changes (
  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,corp_id BIGINT NOT NULL,entity_type VARCHAR(20) NOT NULL,entity_id BIGINT NOT NULL,action VARCHAR(20) NOT NULL,
  reason VARCHAR(500) NOT NULL DEFAULT '',before_json MEDIUMTEXT NOT NULL,after_json MEDIUMTEXT NOT NULL,created_by BIGINT NOT NULL,created_at DATETIME(3) NOT NULL,

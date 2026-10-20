@@ -27,6 +27,7 @@
 .erp-gantt-row.has-risk .erp-gantt-label {background:#fff7f8;box-shadow:inset 2px 0 #fb7185}
 .erp-gantt-milestone {position:absolute;top:26px;width:11px;height:11px;background:#10b981;transform:rotate(45deg)}
 .erp-gantt-milestone.is-late {background:#e11d48}
+.erp-gantt-milestone.is-planned {background:#60a5fa;top:12px}
 .erp-gantt-today {position:absolute;top:0;bottom:0;width:1px;background:#94a3b8;opacity:.7;pointer-events:none}
 .erp-gantt-due-line {position:absolute;top:0;bottom:0;border-left:2px dashed #e11d48;z-index:1;pointer-events:auto}
 .erp-gantt-legend {display:inline-flex;align-items:center;gap:4px}

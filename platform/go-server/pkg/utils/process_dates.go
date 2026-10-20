@@ -14,10 +14,8 @@ func ProcessDay(t time.Time) time.Time {
 }
 
 func ValidateProcessPlan(start, end *time.Time) error {
-	if (start == nil) != (end == nil) {
-		return errors.New("计划开始和计划结束日期须一起填写或一起清空")
-	}
-	if start != nil && ProcessDay(*end).Before(ProcessDay(*start)) {
+	// An unknown duration may have only a start or end date; compare known dates only.
+	if start != nil && end != nil && ProcessDay(*end).Before(ProcessDay(*start)) {
 		return errors.New("计划结束日期不能早于计划开始日期")
 	}
 	return nil

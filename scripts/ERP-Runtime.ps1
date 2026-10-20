@@ -42,6 +42,15 @@ function Test-ErpEndpoint([string]$Url, [switch]$AuthStatus) {
 function Write-ErpRuntimeLog([string]$Message) {
     Add-Content -LiteralPath (Join-Path $erpRuntimeRoot 'launcher.log') -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $Message) -Encoding UTF8
 }
+function Get-ErpStartupFailureDetails {
+    $erpErrorLog = Get-ChildItem -LiteralPath $erpRuntimeRoot -Filter 'backend-*.err.log' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($erpErrorLog) {
+        $erpTail = @(Get-Content -LiteralPath $erpErrorLog.FullName -Tail 6 -ErrorAction SilentlyContinue)
+        if ($erpTail.Count) { return (($erpTail -join [Environment]::NewLine) + [Environment]::NewLine + '日志：' + $erpErrorLog.FullName) }
+    }
+    return ('请查看启动日志：' + (Join-Path $erpRuntimeRoot 'launcher.log'))
+}
 function Stop-ErpTrackedProcess($Record, [string]$ExpectedPath) {
     if (-not $Record) { return }
     $erpTrackedProcess = Get-Process -Id ([int]$Record.pid) -ErrorAction SilentlyContinue

@@ -63,7 +63,7 @@ try {
         $null = $erpTask.Run($null)
         Write-Host '已交给 Windows 独立启动，正在连接数据库并加载页面……'
     }
-    $erpDeadline = [DateTime]::UtcNow.AddSeconds(90)
+    $erpDeadline = [DateTime]::UtcNow.AddSeconds(125)
     do {
         if ((Test-ErpEndpoint $erpBackendStatusUrl -AuthStatus) -and
             (Test-ErpEndpoint $erpUrl) -and (Test-ErpEndpoint $erpProxyStatusUrl -AuthStatus)) {
@@ -75,11 +75,11 @@ try {
         }
         $erpCurrentTask = Get-ErpScheduledTask $erpTaskFolder
         if ($erpCurrentTask -and $erpCurrentTask.State -eq 3 -and $erpCurrentTask.LastTaskResult -ne 0) {
-            throw '后台启动失败。请查看 .runtime\launcher.log；若数据库密码不正确，请运行重新设置数据库密码.bat。'
+            throw ('后台启动失败。' + [Environment]::NewLine + (Get-ErpStartupFailureDetails))
         }
         Start-Sleep -Milliseconds 500
     } while ([DateTime]::UtcNow -lt $erpDeadline)
-    throw '启动超过 90 秒仍未就绪，请检查网络连接和 .runtime\launcher.log。'
+    throw ('启动等待超时，请检查数据库网络连接。' + [Environment]::NewLine + (Get-ErpStartupFailureDetails))
 } catch {
     Write-Host ('启动失败：' + $_.Exception.Message) -ForegroundColor Red
     exit 1

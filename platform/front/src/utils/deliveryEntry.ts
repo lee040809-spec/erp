@@ -18,7 +18,7 @@ export function deliveryEntryState(item?: DeliveryQuantities, batch?: DeliveryQu
   const possibleQualified = Math.max(0, Number(scope.production_quantity ?? scope.quantity) - Number(scope.scrap_quantity || 0));
   const needsCompletion = remaining > 0 && qualified < Math.min(ordered, possibleQualified);
   const subject = batch ? '本批' : '该零件';
-  const message = remaining === 0 ? subject + '已全部登记交货，无需重复登记；如数量有误，请核对发生记录。'
+  const message = remaining === 0 ? subject + '已全部登记交货，无需重复登记；日期或数量有误时，可在“办理零件 → 登记交货”的已登记记录中修改。'
     : limit === 0 && needsCompletion ? subject + '尚无未交的已确认合格数量。生产工序完成后，还需确认合格完工数量，才能登记交货。'
     : limit === 0 ? subject + '当前可交数量为 0，请核对合格完工及交货记录。'
     : '本次最多可交 ' + limit + ' 件，超过的部分请先确认合格完工，或核对已有交货记录。';

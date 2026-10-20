@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -67,12 +69,23 @@ func main() {
 	}()
 
 	// 连接数据库 (GORM)
-	db, err := database.Connect(&database.Config{
-		Host:     cfg.MySQLHost,
-		User:     cfg.MySQLUser,
-		Password: cfg.MySQLPassword,
-		Database: cfg.MySQLDatabase,
-		Port:     cfg.MySQLPort,
+	startupContext, startupCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer startupCancel()
+	autoMigrate := strings.EqualFold(os.Getenv("ERP_AUTO_MIGRATE"), "true")
+	db, err := database.ConnectForStartup(startupContext, &database.Config{
+		Host:        cfg.MySQLHost,
+		User:        cfg.MySQLUser,
+		Password:    cfg.MySQLPassword,
+		Database:    cfg.MySQLDatabase,
+		Port:        cfg.MySQLPort,
+		ReadTimeout: 20 * time.Second,
+	}, func(ready *gorm.DB) error {
+		if autoMigrate {
+			return nil
+		}
+		return database.CheckCoreTables(ready)
+	}, func(attempt int) {
+		log.Printf("数据库连接暂时失败，正在重试（%d/3）；不会创建或修改数据表", attempt)
 	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -83,19 +96,22 @@ func main() {
 		log.Fatalf("Failed to get underlying sql.DB: %v", err)
 	}
 	defer sqlDB.Close()
-	go database.KeepReadConnectionsWarm(ctx, sqlDB, 3)
-
-	// 自动迁移新表
-	if err := db.AutoMigrate(
-		&models.Company{},
-		&models.User{},
-		&models.Role{},
-		&models.Permission{},
-		&models.Resource{},
-		&models.PrintTemplate{},
-	); err != nil {
-		log.Fatalf("Failed to auto migrate: %v", err)
+	// Existing installations start without schema introspection/DDL. An explicit flag is
+	// available for initial core-table installation; business migrations still use reviewed SQL.
+	if autoMigrate {
+		if err := db.WithContext(startupContext).AutoMigrate(
+			&models.Company{},
+			&models.User{},
+			&models.Role{},
+			&models.Permission{},
+			&models.Resource{},
+			&models.PrintTemplate{},
+		); err != nil {
+			log.Fatalf("Failed to auto migrate: %v", err)
+		}
 	}
+	startupCancel()
+	go database.KeepReadConnectionsWarm(ctx, sqlDB, 3)
 
 	// 初始化仓库
 	userRepo := repository.NewUserRepository(db)
@@ -141,6 +157,7 @@ func main() {
 	remnantHandler := handlers.NewRemnantHandler(remnantRepo, db)
 	financeHandler := handlers.NewFinanceHandler(db)
 	productionFinanceHandler := handlers.NewProductionFinanceHandler(db)
+	productionRecordHandler := handlers.NewProductionRecordHandler(db)
 	productionWorkbenchHandler := handlers.NewProductionWorkbenchHandler(db)
 	processTimelineHandler := handlers.NewProcessTimelineHandler(db)
 	productionFlowHandler := handlers.NewProductionFlowHandler(db)
@@ -294,6 +311,8 @@ func main() {
 		// 最终合格完工报工：产值以确认批次的数量和订单单价快照计算
 		api.GET("/order-items/:itemId/completions", productionFinanceHandler.ListCompletions)
 		api.POST("/order-items/:itemId/completions", productionFinanceHandler.CreateCompletion)
+		api.GET("/production/items/:itemId/records", productionRecordHandler.List)
+		api.POST("/production/items/:itemId/records/:kind/:recordId/correct", productionRecordHandler.Correct)
 
 		// 预警规则
 		api.GET("/advent-rules", adventRuleHandler.List)

@@ -56,10 +56,6 @@ func (h *ProcessTimelineHandler) SaveRoute(c *gin.Context) {
 			response.BadRequest(c, response.CodeInvalidRequest, "送货节点只能有一个")
 			return
 		}
-		if (v.PlannedStart == nil) != (v.PlannedEnd == nil) {
-			response.BadRequest(c, response.CodeInvalidRequest, "计划开始和结束日期须一起提供")
-			return
-		}
 		p := models.OrderProcess{ID: v.ID, Name: name, CuttingSpec: v.CuttingSpec, IsOutsourced: v.Outsourced, Status: models.ProcessStatusPending}
 		if p.PlannedStartAt, err = parseProcessNode(v.PlannedStart, nil); err != nil {
 			response.BadRequest(c, response.CodeInvalidRequest, err.Error())
@@ -73,7 +69,7 @@ func (h *ProcessTimelineHandler) SaveRoute(c *gin.Context) {
 			response.BadRequest(c, response.CodeInvalidRequest, err.Error())
 			return
 		}
-		plans[p.ID] = v.PlannedStart != nil
+		plans[p.ID] = v.PlannedStart != nil || v.PlannedEnd != nil
 		incoming = append(incoming, p)
 	}
 	err = repository.NewOrderRepository(h.db).UpdateRouteForCorp(middleware.GetCorpID(c), itemID, middleware.GetUserID(c), incoming, plans, repository.RouteChangeOptions{AllowProcessedChanges: req.AllowProcessedChanges, Reason: req.Reason})

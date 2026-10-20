@@ -46,7 +46,8 @@ try {
         if (Test-Path -LiteralPath $erpStopRequestPath) { Write-ErpRuntimeLog 'Stop requested by user.'; break }
         $erpBackendProcess.Refresh()
         $erpFrontendProcess.Refresh()
-        if ($erpBackendProcess.HasExited -or $erpFrontendProcess.HasExited) { throw 'An ERP service exited; Windows will retry the task up to three times.' }
+        if ($erpBackendProcess.HasExited) { throw ('Backend exited (code ' + $erpBackendProcess.ExitCode + '). See backend-' + $erpRunStamp + '.err.log; Windows will retry the task up to three times.') }
+        if ($erpFrontendProcess.HasExited) { throw ('Frontend exited (code ' + $erpFrontendProcess.ExitCode + '). See frontend-' + $erpRunStamp + '.err.log; Windows will retry the task up to three times.') }
         Start-Sleep -Seconds 5
     }
 } catch {

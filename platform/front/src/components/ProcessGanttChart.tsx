@@ -52,7 +52,7 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
     return [...parts.values()];
   }, [rows, partMetadata]);
   const initial = useMemo(() => {
-    const nodes = rows.flatMap(r => [nodeTime(r.process.planned_start_at), nodeTime(r.process.actual_start_at), nodeTime(r.process.actual_end_at)]).filter(Number.isFinite);
+    const nodes = rows.flatMap(r => [nodeTime(r.process.planned_start_at), nodeTime(r.process.planned_end_at), nodeTime(r.process.actual_start_at), nodeTime(r.process.actual_end_at)]).filter(Number.isFinite);
     return dayStart(nodes.length ? Math.min(...nodes) : Date.now());
   }, [rows]);
   const extent = useMemo(() => timelineExtent([...rows, ...groups, ...groups.flatMap(g=>(g.batches || []).map(b=>({...g,dueDate:b.due_date})))].filter(r => overview == null || r.itemId === overview)), [rows, groups, overview]);
@@ -99,9 +99,11 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
   const renderProcess = (row: ProcessGanttRow, index: number) => {
     const p = row.process, actualStart = nodeTime(p.actual_start_at), actualEnd = nodeTime(p.actual_end_at);
     const plannedStart = nodeTime(p.planned_start_at), plannedEnd = nodeTime(p.planned_end_at) + DAY, due = nodeTime(row.dueDate);
-    const hasNodes = [actualStart, actualEnd, plannedStart].some(Number.isFinite);
+    const hasNodes = [actualStart, actualEnd, plannedStart, plannedEnd].some(Number.isFinite);
+    const singlePlan = Number.isFinite(plannedStart) !== Number.isFinite(plannedEnd) ? (Number.isFinite(plannedStart) ? plannedStart : plannedEnd - DAY) : NaN;
+    const planNodeVisible = singlePlan >= start && singlePlan < end;
     const milestoneVisible = !Number.isFinite(actualStart) && actualEnd >= start && actualEnd < end;
-    const hasVisible = intersects(plannedStart, plannedEnd) || intersects(actualStart, (Number.isFinite(actualEnd) ? actualEnd : now) + DAY) || milestoneVisible;
+    const hasVisible = intersects(plannedStart, plannedEnd) || intersects(actualStart, (Number.isFinite(actualEnd) ? actualEnd : now) + DAY) || milestoneVisible || planNodeVisible;
     const risk = processScheduleRisk(p);
     const dates = `计划：${displayNode(p.planned_start_at)} → ${displayNode(p.planned_end_at)}；实际：${displayNode(p.actual_start_at)} → ${displayNode(p.actual_end_at)}${risk ? `；${risk}` : ''}`;
     return <div key={`${row.itemId}-${p.id ?? index}`} className={`erp-gantt-row ${risk && risk !== '实际日期待补录' ? 'has-risk' : ''}`}>
@@ -112,6 +114,7 @@ export default function ProcessGanttChart({ rows, parts: partMetadata = [], onSe
       <button type="button" title={dates} onClick={() => onSelect?.(row)} className="erp-gantt-track" style={{ width, backgroundSize: `${dayWidth * tickStep}px 100%` }} aria-label={`${row.partName}的${p.name}时间条`}>
         {Number.isFinite(due) && due + DAY >= start && due + DAY < end && <span title={`客户交期：${displayNode(row.dueDate)}（当天结束）`} className="erp-gantt-due-line" style={{ left: `${(due + DAY - start) / (visibleDays * DAY) * 100}%` }} />}
         {bar(plannedStart, plannedEnd, false, row)}
+        {planNodeVisible && <span title={`计划${p.planned_start_at ? '开始' : '结束'} ${displayNode(p.planned_start_at || p.planned_end_at)}；另一日期未填写`} className="erp-gantt-milestone is-planned" style={{ left: `${(singlePlan - start + DAY / 2) / (visibleDays * DAY) * 100}%` }} />}
         {bar(actualStart, (Number.isFinite(actualEnd) ? actualEnd : now) + DAY, true, row)}
         {milestoneVisible && <span title={`实际完工 ${displayNode(p.actual_end_at)}，开工时间未记录`} className={`erp-gantt-milestone ${risk && risk !== '实际日期待补录' ? 'is-late' : ''}`} style={{ left: `${(actualEnd - start + DAY / 2) / (visibleDays * DAY) * 100}%` }} />}
         {!hasNodes && <span className="erp-gantt-empty-node">未排期{p.status !== 'pending' ? ' · 实际待补录' : ''}</span>}

@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestProcessNodeValidation(t *testing.T) {
 	cases := []struct {
 		p  models.OrderProcess
 		ok bool
-	}{{models.OrderProcess{PlannedStartAt: &a}, false}, {models.OrderProcess{PlannedStartAt: &b, PlannedEndAt: &previous}, false}, {models.OrderProcess{PlannedStartAt: &a, PlannedEndAt: &a}, true}, {models.OrderProcess{PlannedStartAt: &a, PlannedEndAt: &b}, true}, {models.OrderProcess{ActualStartAt: &b, ActualEndAt: &previous}, false}, {models.OrderProcess{ActualStartAt: &b, ActualEndAt: &a}, true}, {models.OrderProcess{ActualEndAt: &a}, true}, {models.OrderProcess{ActualStartAt: &future}, false}, {models.OrderProcess{ActualStartAt: &now}, true}}
+	}{{models.OrderProcess{}, true}, {models.OrderProcess{PlannedEndAt: &a}, true}, {models.OrderProcess{PlannedStartAt: &a}, true}, {models.OrderProcess{PlannedStartAt: &b, PlannedEndAt: &previous}, false}, {models.OrderProcess{PlannedStartAt: &a, PlannedEndAt: &a}, true}, {models.OrderProcess{PlannedStartAt: &a, PlannedEndAt: &b}, true}, {models.OrderProcess{ActualStartAt: &b, ActualEndAt: &previous}, false}, {models.OrderProcess{ActualStartAt: &b, ActualEndAt: &a}, true}, {models.OrderProcess{ActualEndAt: &a}, true}, {models.OrderProcess{ActualStartAt: &future}, false}, {models.OrderProcess{ActualStartAt: &now}, true}}
 	for i, c := range cases {
 		err := validateProcessNodes(c.p, now.Add(-time.Minute))
 		if (err == nil) != c.ok {
@@ -295,6 +296,23 @@ func TestProcessTimelineTemporaryTables(t *testing.T) {
 	check(db.Model(&models.ProcessTimeEvent{}).Where("process_id=? AND source='order'", entryProcess.ID).Count(&n).Error)
 	if n != 2 {
 		t.Fatal("order plan changes not audited")
+	}
+	// Unknown durations accept independent plan nodes without requiring actual dates.
+	processID := strconv.FormatInt(entryProcess.ID, 10)
+	itemID := strconv.FormatInt(entryItem.ID, 10)
+	call(h.Save, `{"planned_start_at":"2026-10-06"}`, itemID, processID, "user", 200)
+	call(h.Save, `{"planned_start_at":"","planned_end_at":"2026-10-08"}`, itemID, processID, "user", 200)
+	call(h.Save, `{"planned_end_at":""}`, itemID, processID, "user", 200)
+	_, _, err = repo.UpdateProcessForCorp(0, entryItem.ID, entryProcess.ID, &completed, nil, nil, 1)
+	check(err)
+	direct := models.OrderProcess{}
+	check(db.First(&direct, entryProcess.ID).Error)
+	if direct.Status != models.ProcessStatusCompleted || direct.ActualStartAt != nil || direct.ActualEndAt == nil || direct.PlannedStartAt != nil || direct.PlannedEndAt != nil {
+		t.Fatal("direct completion required dates or invented an unknown start")
+	}
+	check(db.Table("production_completions").Count(&n).Error)
+	if n != 0 {
+		t.Fatal("direct process completion must not create qualified output")
 	}
 	// An explicitly approved legacy retirement keeps actual dates, fee snapshots and order-delete protection.
 	call(h.SaveRoute, `{"allow_processed_changes":true,"reason":"取消历史铣削，保留原加工记录","processes":[{"id":3,"name":"送货"},{"id":4,"name":"历史加工"}]}`, "1", "", "admin", 200)

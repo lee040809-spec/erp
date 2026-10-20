@@ -11,7 +11,16 @@ assert.equal(processDate('2026-09-01'), '2026-09-01');
 const process = {id:1,name:'铣削',is_outsourced:false,outsourcing_fee:0,status:'completed' as const,planned_start_at:'2026-09-01',planned_end_at:'2026-09-01',actual_start_at:'2026-09-01T01:15:00Z',actual_end_at:'2026-09-01T15:45:00Z'};
 assert.equal(invalidOrderProcessDates([process]), false);
 assert.equal(invalidOrderProcessDates([{...process,planned_end_at:'2026-08-31'}]), true);
-assert.equal(invalidOrderProcessDates([{...process,planned_end_at:''}]), true);
+assert.equal(invalidOrderProcessDates([{...process,planned_end_at:''}]), false);
+assert.equal(invalidOrderProcessDates([{...process,planned_start_at:''}]), false);
+assert.equal(invalidOrderProcessDates([{...process,planned_start_at:'',planned_end_at:''}]), false);
+for (const startOnly of [true, false]) {
+  const partial = {...process, status:'pending' as const, actual_start_at:null, actual_end_at:null, planned_start_at:startOnly?'2026-09-01':null, planned_end_at:startOnly?null:'2026-09-01'};
+  const partialHtml = renderToStaticMarkup(<ProcessGanttChart rows={[{itemId:1,partName:'周期未知',process:partial}]}/>);
+  assert.match(partialHtml, /erp-gantt-milestone is-planned/);
+  assert.doesNotMatch(partialHtml, /未排期 · 实际待补录|日期在当前时段外/);
+  assert.equal(processScheduleRisk(partial, Date.parse('2026-09-01T00:00:00+08:00')), '');
+}
 const html = renderToStaticMarkup(<ProcessGanttChart rows={[{itemId:1,partName:'按天图形测试',process}]}/>);
 assert.match(html, /计划：2026-09-01 → 2026-09-01/);
 assert.match(html, /实际：2026-09-01 → 2026-09-01/);
@@ -30,7 +39,7 @@ assert.match(grouped, /下单 2026-08-31/);
 assert.match(grouped, /下单 未填/);
 assert.match(grouped, /aria-expanded="true"/);
 assert.match(grouped, /全部折叠/);
-console.log('PASS: Beijing calendar dates, same-day full-width bars, daily tooltips, paired order dates and invalid ranges.');
+console.log('PASS: Beijing dates, optional independent plan nodes, unknown durations, same-day bars, daily tooltips and invalid ranges.');
 console.log('PASS: item groups keep identical part names in different orders separate and expanded by default.');
 
 const now = Date.parse('2026-10-07T02:00:00Z');

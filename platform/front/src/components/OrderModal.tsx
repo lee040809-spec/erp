@@ -85,7 +85,7 @@ const OrderModal: React.FC<OrderModalProps> = (p) => {
                 return;
             }
             if (items.some(i => invalidOrderProcessDates(i.processes || []))) {
-                setFormErrors({ ...formErrors, items: '工序计划开始和结束日期须一起填写或一起清空，结束日期不能早于开始日期' });
+                setFormErrors({ ...formErrors, items: '工序计划结束日期不能早于计划开始日期；不确定的日期可留空' });
                 return;
             }
             onSubmit(e);

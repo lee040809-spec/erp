@@ -9,4 +9,5 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-timeout /t 3 >nul
+timeout /t 3 /nobreak >nul 2>nul
+exit /b 0
