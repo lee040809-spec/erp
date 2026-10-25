@@ -1,3 +1,4 @@
+import DeliveryReconciliation from "../features/accounting/DeliveryReconciliation";
 import { businessToday } from "../utils/businessDate";
 import React from "react";
 import { useOrderQuery } from "../hooks/useOrderQuery";
@@ -63,6 +64,8 @@ const Reconciliation: React.FC<ReconciliationProps> = ({
   fetchOrdersWithFilters,
   hideCostFields = false,
 }) => {
+  const [mode, setMode] = React.useState<"orders" | "deliveries">("deliveries");
+  const [deliveryBusy, setDeliveryBusy] = React.useState(false);
   const { isSearching, queryError, run, retry } = useOrderQuery();
   const [previewBusy, setPreviewBusy] = React.useState(false),
     [notice, setNotice] = React.useState("");
@@ -89,6 +92,7 @@ const Reconciliation: React.FC<ReconciliationProps> = ({
   const [configTemplate, setConfigTemplate] =
     React.useState<PrintTemplate | null>(null);
 
+  const selectedSnapshots = React.useRef(new Map<number, Order>());
   const applied = React.useRef(reconciliationFilters);
   const handlePageChange = async (
     nextPage: number,
@@ -96,7 +100,6 @@ const Reconciliation: React.FC<ReconciliationProps> = ({
     nextFilters = applied.current,
   ) => {
     if (busy.current) return;
-    setSelectedOrderIds(new Set());
     setNotice("");
     await run(() =>
       fetchOrdersWithFilters(
@@ -108,21 +111,41 @@ const Reconciliation: React.FC<ReconciliationProps> = ({
   };
 
   const handleSearch = (nextFilters = reconciliationFilters) => {
+    if (
+      selectedOrderIds.size &&
+      nextFilters.customerName &&
+      nextFilters.customerName !== applied.current.customerName &&
+      !selectedCustomer.includes(nextFilters.customerName)
+    ) {
+      if (!window.confirm("切换客户将清空当前已选订单，是否继续？")) return;
+      setSelectedOrderIds(new Set());
+      selectedSnapshots.current.clear();
+    }
     applied.current = nextFilters;
     setReconciliationPage(1);
     return handlePageChange(1, reconciliationPageSize, nextFilters);
   };
   React.useEffect(() => {
-    void handlePageChange(1);
-  }, []);
+    if (mode === "orders") void handlePageChange(1);
+  }, [mode]);
   // 多选订单处理
   const handleSelectOrder = (orderId: number | null) => {
     if (orderId === null || busy.current || isSearching || queryError) return;
     const next = new Set(selectedOrderIds);
     if (next.has(orderId)) next.delete(orderId);
     else next.add(orderId);
+    const candidate = orders.find((o) => o.id === orderId);
+    if (candidate) selectedSnapshots.current.set(orderId, candidate);
+    if (next.size > 200) {
+      setNotice("一次最多选择200个订单，请分次核对。");
+      return;
+    }
     const problem = next.size
-      ? reconciliationSelectionError(orders.filter((o) => next.has(o.id || 0)))
+      ? reconciliationSelectionError(
+          [...selectedSnapshots.current.values()].filter((o) =>
+            next.has(o.id || 0),
+          ),
+        )
       : "";
     if (problem) {
       setNotice(problem);
@@ -134,7 +157,9 @@ const Reconciliation: React.FC<ReconciliationProps> = ({
 
   // 获取选中的订单列表
   const getSelectedOrders = () => {
-    return orders.filter((o) => selectedOrderIds.has(o.id || 0));
+    return [...selectedSnapshots.current.values()].filter((o) =>
+      selectedOrderIds.has(o.id || 0),
+    );
   };
 
   const selectedOrders = getSelectedOrders();
@@ -198,98 +223,156 @@ const Reconciliation: React.FC<ReconciliationProps> = ({
   return (
     <div className="erp-page space-y-3">
       <AccountingGuide mode="reconciliation" />
-      <label className="erp-label flex flex-wrap gap-2 items-center">
-        本次对账日期
-        <input
-          aria-label="本次对账日期"
-          type="date"
-          required
-          className="erp-input !w-auto"
-          disabled={previewBusy}
-          value={reconciliationDate}
-          onChange={(e) => setReconciliationDate(e.target.value)}
-        />
-        <span className="text-xs text-slate-500">
-          只用于本次对账单，不修改订单日期。
-        </span>
-      </label>
-      <p className="text-sm text-slate-500">
-        这里展示已完工订单，按订单约定金额核对；不代表已交货、客户已确认或已经付款。
-      </p>
-      {notice && (
-        <p
-          role="alert"
-          className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900"
+      <div className="flex gap-2">
+        <button
+          className={`erp-btn ${mode === "deliveries" ? "erp-primary" : ""}`}
+          disabled={previewBusy || deliveryBusy}
+          onClick={() => setMode("deliveries")}
         >
-          {notice}
-        </p>
-      )}
-      <OrderMonitorPanel
-        title="对账管理"
-        queryError={queryError}
-        onRetryQuery={retry}
-        reconciliationBusy={previewBusy}
-        reconciliationLabel={
-          selectedOrders.length
-            ? `${selectedCustomer} · 已选 ${selectedOrders.length} 个订单（本页）`
-            : "先勾选同一客户的订单"
-        }
-        onClearReconciliationSelection={() => {
-          setSelectedOrderIds(new Set());
-          setNotice("");
-        }}
-        icon={FileText}
-        orders={completedOrders}
-        filters={reconciliationFilters}
-        setFilters={setReconciliationFilters}
-        filterConfigs={simpleFilterConfigs}
-        total={orderTotal}
-        page={reconciliationPage}
-        setPage={setReconciliationPage}
-        pageSize={reconciliationPageSize}
-        setPageSize={setReconciliationPageSize}
+          按实际送货对账
+        </button>
+        <button
+          className={`erp-btn ${mode === "orders" ? "erp-primary" : ""}`}
+          disabled={previewBusy || deliveryBusy}
+          onClick={() => setMode("orders")}
+        >
+          按整单约定金额核对
+        </button>
+      </div>
+      <section hidden={mode !== "deliveries"}>
+        <DeliveryReconciliation onBusyChange={setDeliveryBusy} />
+      </section>
+      {mode === "orders" && (
+        <>
+          <label className="erp-label flex flex-wrap gap-2 items-center">
+            本次对账日期
+            <input
+              aria-label="本次对账日期"
+              type="date"
+              required
+              className="erp-input !w-auto"
+              disabled={previewBusy}
+              value={reconciliationDate}
+              onChange={(e) => setReconciliationDate(e.target.value)}
+            />
+            <span className="text-xs text-slate-500">
+              只用于本次对账单，不修改订单日期。
+            </span>
+          </label>
+          <p className="text-sm text-slate-500">
+            这里展示已完工订单，按订单约定金额核对；不代表已交货、客户已确认或已经付款。
+          </p>
+          {!!selectedOrders.length && (
+            <aside className="erp-card p-3 bg-blue-50 text-sm">
+              <strong>
+                {selectedCustomer} · 已选 {selectedOrders.length} 单 ·{" "}
+                {selectedOrders.reduce(
+                  (n, o) =>
+                    n +
+                    (o.items || []).reduce(
+                      (q, i) => q + Number(i.quantity || 0),
+                      0,
+                    ),
+                  0,
+                )}{" "}
+                件
+                {!hideCostFields &&
+                  ` · 参考金额 ${selectedOrders.reduce((n, o) => n + Number(o.total_amount || 0), 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              </strong>
+              <p className="text-xs text-slate-500 mt-1">
+                跨页保留；生成前由服务器重新校验当前资料。
+              </p>
+              <div className="max-h-24 overflow-auto mt-2">
+                {selectedOrders.map((o) => (
+                  <button
+                    key={o.id}
+                    className="erp-btn mr-2 mb-1"
+                    disabled={previewBusy || isSearching}
+                    onClick={() => handleSelectOrder(o.id!)}
+                  >
+                    {o.order_number} × 移除
+                  </button>
+                ))}
+              </div>
+            </aside>
+          )}
+          {notice && (
+            <p
+              role="alert"
+              className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              {notice}
+            </p>
+          )}
+          <OrderMonitorPanel
+            title="对账管理"
+            queryError={queryError}
+            onRetryQuery={retry}
+            reconciliationBusy={previewBusy}
+            reconciliationLabel={
+              selectedOrders.length
+                ? `${selectedCustomer} · 已选 ${selectedOrders.length} 个订单（跨页保留）`
+                : "先勾选同一客户的订单"
+            }
+            onClearReconciliationSelection={() => {
+              setSelectedOrderIds(new Set());
+              selectedSnapshots.current.clear();
+              setNotice("");
+            }}
+            icon={FileText}
+            orders={completedOrders}
+            filters={reconciliationFilters}
+            setFilters={setReconciliationFilters}
+            filterConfigs={simpleFilterConfigs}
+            total={orderTotal}
+            page={reconciliationPage}
+            setPage={setReconciliationPage}
+            pageSize={reconciliationPageSize}
+            setPageSize={setReconciliationPageSize}
 
-        themeColor="blue"
-        editOrder={editOrder}
-        setShowDrawingModal={setShowDrawingModal}
-        handleProcessClick={handleProcessClick}
-        getOrderMaxDueDate={getOrderMaxDueDate}
-        showOrderName={true}
-        showContactName={true}
-        showOutsourcingFee={false}
-        showTotalAmount={!hideCostFields}
-        onSearch={() => handleSearch()}
-        onReset={handleSearch}
-        onPageChangeWithFilters={handlePageChange}
-        isSearching={isSearching}
-        reconciliationMode={true}
-        selectedOrderIds={selectedOrderIds}
-        onSelectOrder={handleSelectOrder}
-        onPreviewReconciliation={handlePreviewReconciliation}
-        onConfigReconciliation={handleConfigReconciliation}
-      />
+            themeColor="blue"
+            editOrder={editOrder}
+            setShowDrawingModal={setShowDrawingModal}
+            handleProcessClick={handleProcessClick}
+            getOrderMaxDueDate={getOrderMaxDueDate}
+            showOrderName={true}
+            showContactName={true}
+            showOutsourcingFee={false}
+            showTotalAmount={!hideCostFields}
+            onSearch={() => handleSearch()}
+            onReset={handleSearch}
+            onPageChangeWithFilters={handlePageChange}
+            isSearching={isSearching}
+            reconciliationMode={true}
+            selectedOrderIds={selectedOrderIds}
+            onSelectOrder={handleSelectOrder}
+            onPreviewReconciliation={handlePreviewReconciliation}
+            onConfigReconciliation={handleConfigReconciliation}
+          />
 
-      {/* 对账单预览弹窗 */}
-      {showPreviewModal && previewOrders.length > 0 && previewTemplate && (
-        <ReconciliationPreviewModal
-          reconciliationDate={reconciliationDate}
-          orders={previewOrders}
-          template={previewTemplate}
-          mode="preview"
-          title="预览对账单"
-          orderData={previewOrderData}
-          onClose={() => setShowPreviewModal(false)}
-        />
-      )}
+          {/* 对账单预览弹窗 */}
+          {showPreviewModal && previewOrders.length > 0 && previewTemplate && (
+            <ReconciliationPreviewModal
+              reconciliationDate={reconciliationDate}
+              orders={previewOrders}
+              template={previewTemplate}
+              mode="preview"
+              title="预览对账单"
+              orderData={previewOrderData}
+              onClose={() => setShowPreviewModal(false)}
+            />
+          )}
 
-      {/* 对账单配置弹窗 - 不传订单 */}
-      {showConfigModal && configTemplate && (
-        <ReconciliationPreviewModal
-          template={configTemplate}
-          mode="config"
-          title="配置对账单"
-          onClose={() => setShowConfigModal(false)}
-        />
+          {/* 对账单配置弹窗 - 不传订单 */}
+          {showConfigModal && configTemplate && (
+            <ReconciliationPreviewModal
+              template={configTemplate}
+              mode="config"
+              title="配置对账单"
+              onClose={() => setShowConfigModal(false)}
+            />
+          )}
+        </>
       )}
     </div>
   );

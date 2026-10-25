@@ -1,3 +1,4 @@
+import { businessToday } from '../utils/businessDate';
 import React, { useCallback, useRef } from 'react';
 import { Order, OrderProcess } from '../types';
 import { saveProcessStatus, ProcessSaveNotice } from '../services/processStatus';
@@ -120,7 +121,7 @@ export function useOrders(
     setNewOrder({
       priority: 'medium',
       status: 'pending',
-      start_date: '',
+      start_date: businessToday(),
       due_date: '',
       order_number: generatedOrderNumber,
       items: [{ part_name: '', quantity: 1, unit_price: 0, processes: [] }]

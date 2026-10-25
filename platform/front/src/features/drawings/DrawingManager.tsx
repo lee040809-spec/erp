@@ -256,7 +256,7 @@ export default function DrawingManager(
                     disabled={busy}
                     onClick={() => setPreview(d)}
                   >
-                    预览 / 下载
+                    预览
                   </button>
                   {canManage && p.itemId && (
                     <button
@@ -292,7 +292,7 @@ export default function DrawingManager(
                 disabled={busy}
                 onClick={() => void showLegacy()}
               >
-                预览 / 下载
+                预览
               </button>
             </div>
           )}

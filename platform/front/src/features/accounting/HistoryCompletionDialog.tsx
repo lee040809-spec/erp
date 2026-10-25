@@ -75,10 +75,9 @@ export default function HistoryCompletionDialog({
               </label>
             </div>
             <label className="erp-label">
-              本批确认单价 *
+              本批确认单价（未填时先登记合格）
               <input
                 aria-label="本批确认单价"
-                required
                 inputMode="decimal"
                 pattern="\d{1,11}(\.\d{1,4})?"
                 value={form.price}
@@ -86,7 +85,7 @@ export default function HistoryCompletionDialog({
                 className="erp-input"
               />
               <span className="text-xs text-slate-500">
-                默认使用订单当前单价，仅用于本次完工，不修改订单单价。
+                已有单价时默认沿用，仅用于本批、不修改订单单价。订单未填价格时可留空，金额标为待补价，补价后归原完工月份。
               </span>
             </label>
             <details
@@ -142,7 +141,11 @@ export default function HistoryCompletionDialog({
                 disabled={saving || !canSave}
                 className="bg-zinc-900 text-white px-4 py-2 disabled:opacity-50"
               >
-                {saving ? "正在导入…" : "确认计入产值"}
+                {saving
+                  ? "正在导入…"
+                  : Number(form.price || selected.unit_price) > 0
+                    ? "确认计入产值"
+                    : "确认合格（待补价）"}
               </button>
             </div>
           </form>

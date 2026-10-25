@@ -1,4 +1,4 @@
-export type WorkbenchView = 'all' | 'unassigned' | 'today' | 'overdue' | 'blocked' | 'outsourced';
+export type WorkbenchView = 'unfinished' | 'week' | 'all' | 'unassigned' | 'today' | 'overdue' | 'blocked' | 'outsourced';
 
 export interface WorkbenchState {
     view: WorkbenchView;
@@ -20,6 +20,8 @@ export interface WorkbenchOrderTarget {
 }
 
 export const workbenchViewDescriptions: Record<WorkbenchView, string> = {
+    unfinished: '只看仍未完成全部合格确认的投产任务，保留当前关键词。',
+    week: '显示本周剩余日期内需要交货的零件或分批任务。',
     all: '按零件下单日期从新到旧排列；未填时沿用订单日期。点击“办理零件”在同一窗口完成生产与交货登记。',
     unassigned: '生产安排尚未填写负责人的零件。',
     today: '计划完工日期为今天的零件；未排计划时优先按未交完批次交期，其次按零件交期判断。',

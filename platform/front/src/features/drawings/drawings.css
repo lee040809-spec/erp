@@ -115,6 +115,12 @@
   font-size: 13px;
   border-bottom: 1px solid #e2e8f0;
 }
+.drawing-print-error {
+  color: #be123c;
+  white-space: normal;
+  min-width: 160px;
+  max-width: 320px;
+}
 .drawing-preview > header .erp-btn,
 .drawing-preview .drawing-toolbar .erp-btn {
   min-height: 30px;

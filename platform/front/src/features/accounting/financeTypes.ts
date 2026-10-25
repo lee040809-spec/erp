@@ -16,7 +16,9 @@ export interface Candidate {
   tax_inclusive: number;
 }
 export interface Batch {
+  pricing_status?: "priced" | "pending";
   id: number;
+  order_item_id?: number;
   completion_no: string;
   order_number: string;
   customer_name: string;

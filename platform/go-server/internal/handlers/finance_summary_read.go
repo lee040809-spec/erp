@@ -8,6 +8,8 @@ import (
 
 type financeProduced struct {
 	Month, Quantity, Billable, Reserve, Output string
+	PendingQuantity                            string
+	PendingCount                               int64
 	Count                                      int64
 }
 type financeSpent struct{ Month, Material, Outsourcing, Other, Total string }
@@ -38,7 +40,7 @@ func readFinanceSummary(db *gorm.DB, corp int64, year string) (financeSummaryRea
 			return err
 		},
 		func(db *gorm.DB) error {
-			return db.Raw(`SELECT DATE_FORMAT(business_date,'%Y-%m') AS month,CAST(SUM(qualified_quantity) AS CHAR) AS quantity,CAST(SUM(billable_quantity) AS CHAR) AS billable,CAST(SUM(qualified_quantity-billable_quantity) AS CHAR) AS reserve,COUNT(*) AS count,CAST(SUM(output_value) AS CHAR) AS output FROM production_completions WHERE corp_id=? AND status='confirmed' AND business_date>=? AND business_date<? GROUP BY month`, corp, start, end).Scan(&s.Outputs).Error
+			return db.Raw(`SELECT DATE_FORMAT(business_date,'%Y-%m') AS month,CAST(SUM(qualified_quantity) AS CHAR) AS quantity,CAST(SUM(CASE WHEN pricing_status='priced' THEN billable_quantity ELSE 0 END) AS CHAR) AS billable,CAST(SUM(qualified_quantity-billable_quantity) AS CHAR) AS reserve,COUNT(*) AS count,SUM(pricing_status='pending') AS pending_count,CAST(SUM(CASE WHEN pricing_status='pending' THEN qualified_quantity ELSE 0 END) AS CHAR) AS pending_quantity,CAST(SUM(output_value) AS CHAR) AS output FROM production_completions WHERE corp_id=? AND status='confirmed' AND business_date>=? AND business_date<? GROUP BY month`, corp, start, end).Scan(&s.Outputs).Error
 		},
 		func(db *gorm.DB) error {
 			return db.Raw(`SELECT DATE_FORMAT(p.business_date,'%Y-%m') AS month,

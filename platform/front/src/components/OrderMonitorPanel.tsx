@@ -1,3 +1,5 @@
+import { readScoped, writeScoped } from '../utils/scopedStorage';
+import { useRememberedScroll } from '../hooks/useRememberedScroll';
 import PartCostSummary, { orderItemCosts } from '../features/accounting/PartCostSummary';
 import DrawingButton from '../features/drawings/DrawingButton';
 import PartWorkflowModal from "./PartWorkflowModal";
@@ -74,7 +76,9 @@ interface OrderMonitorPanelProps {
 }
 const OrderMonitorPanel: React.FC<OrderMonitorPanelProps> = (p) => {
     const { title, icon: Icon, orders, filters, setFilters, page, setPage, pageSize, setPageSize, total, themeColor, editOrder, deleteOrder, getOrderMaxDueDate, onSearch, onNewOrder, isSearching, onPageChangeWithFilters, deliveryMode, reconciliationMode, onSelectOrder } = p;
-    const [expanded, setExpanded] = useState<Set<number>>(new Set()), [advanced, setAdvanced] = useState(false);
+    const [expanded, setExpanded] = useState<Set<number>>(()=>{const ids=readScoped<unknown>(`orders:${title}:expanded`,[]);return new Set(Array.isArray(ids)?ids.filter(Number.isSafeInteger).slice(-500):[])}), [advanced, setAdvanced] = useState(()=>readScoped(`orders:${title}:advanced`,false));
+    const pageScroll=useRememberedScroll(`orders:${title}:scroll`,!isSearching && orders.length>0,!p.focusOrderId);
+    useEffect(()=>{writeScoped(`orders:${title}:expanded`,[...expanded].slice(-500));writeScoped(`orders:${title}:advanced`,advanced)},[title,expanded,advanced]);
     const [business, setBusiness] = useState<{
         order: Order;
         kind: 'records' | 'exception' | 'delivery' | 'scrap' | 'completion';
@@ -110,7 +114,7 @@ const OrderMonitorPanel: React.FC<OrderMonitorPanelProps> = (p) => {
     const allOpen = visible.length > 0 && visible.every(o => expanded.has(o.id || 0));
     const activeFilters = Object.entries(filters || {}).filter(([, v]) => Boolean(v)).length;
     const field = (f: FilterConfig) => <label key={f.key} className="erp-label flex-1 min-w-[140px]">{f.label}{f.type === 'select' ? <select disabled={isSearching || p.reconciliationBusy} className="erp-input" value={filters?.[f.key] || ''} onChange={e => { setFilters({ ...filters, [f.key]: e.target.value }); if (total === undefined) setPage(1); }}><option value="">{f.placeholder || '全部'}</option>{f.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select> : <input disabled={isSearching || p.reconciliationBusy} className="erp-input" type={f.type} value={filters?.[f.key] || ''} placeholder={f.placeholder} onKeyDown={e => { if (e.key === 'Enter' && !isSearching) onSearch?.(); }} onChange={e => { setFilters({ ...filters, [f.key]: e.target.value }); if (total === undefined) setPage(1); }}/>}</label>;
-    return <div className="erp-page erp-compact-orders flex flex-col gap-3" data-design-version="20261005-orders">
+    return <div ref={pageScroll} className="erp-page erp-compact-orders flex flex-col gap-3" data-design-version="20261005-orders">
   <header className="flex items-center justify-between gap-3 flex-wrap"><div><p className="text-[11px] text-blue-600 tracking-widest font-semibold mb-2">订单协同 / {title}</p><h2 className="text-2xl font-bold flex items-center gap-2"><Icon size={24}/>{title}</h2><p className="text-sm text-slate-400 mt-2">共 {count} 个订单 · 本页 {visible.reduce((n, o) => n + (o.items?.length || 0), 0)} 项零件明细</p></div><div className="flex gap-2 flex-wrap"><button className="erp-btn" onClick={() => setExpanded(allOpen ? new Set() : new Set(visible.map(o => o.id || 0)))}>{allOpen ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}全部{allOpen ? '收起' : '展开'}</button>{onNewOrder && <button onClick={onNewOrder} className="erp-btn erp-primary"><Plus size={16}/>新建订单</button>}</div></header>
   {p.focusOrderId && p.onReturnToWorkbench && <div className="erp-card p-3 bg-blue-50 border-blue-100 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-blue-700">来自工作看板 · {p.sourcePartName || "对应零件"}<span className="block mt-1">对应订单已自动展开，来源零件以蓝色标出。</span></p><button onClick={p.onReturnToWorkbench} className="erp-btn text-blue-700">返回工作看板</button></div>}
   <section className="erp-order-filters erp-card p-4 space-y-3"><div className="flex flex-wrap items-end gap-3">{configs.filter(f => f.type === 'text').map(field)}<button className="erp-btn" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={15}/>更多筛选{activeFilters > 0 && <span className="text-blue-600">({activeFilters})</span>}</button>{onSearch && <button onClick={() => onSearch?.()} disabled={isSearching || p.reconciliationBusy} className="erp-btn erp-primary">{isSearching ? <RefreshCw size={15} className="animate-spin"/> : <Search size={15}/>}查询</button>}<button disabled={isSearching || p.reconciliationBusy} className="erp-btn text-slate-500" onClick={() => { const empty = Object.fromEntries(Object.keys(filters || {}).map(k => [k, ''])); setFilters(empty); setPage(1); p.onReset?.(empty); }}>重置条件</button></div>{advanced && <div className="flex gap-3 flex-wrap border-t border-slate-100 pt-3">{configs.filter(f => f.type !== 'text').map(field)}</div>}</section>

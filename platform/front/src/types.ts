@@ -115,6 +115,8 @@ export interface Reconciliation {
     delivered_amount: number;
 }
 export interface MonthlyFinanceSummary {
+ pending_pricing_count?:number;
+ pending_pricing_quantity?:string;
     order_amount?: string;
     order_costs?: OrderCostTotals;
     month: string;
@@ -167,6 +169,7 @@ export interface ProductionCompletion {
     confirmed_at: string;
 }
 export interface CompletionListResponse {
+    has_more?:boolean;
     records: ProductionCompletion[];
     production_quantity: number;
     scrap_quantity: number;

@@ -36,6 +36,8 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 	}
 	conditions := map[string]string{
 		"all":        "",
+		"unfinished": " AND COALESCE(q.qualified_quantity,0)<COALESCE(NULLIF(i.production_quantity,0),i.quantity)-COALESCE(i.scrap_quantity,0)",
+		"week":       " AND COALESCE(bd.next_due,i.due_date)>=? AND COALESCE(bd.next_due,i.due_date)<=?",
 		"unassigned": " AND COALESCE(pp.assignee,'')=''",
 		"today":      " AND COALESCE(pp.planned_end,bd.next_due,i.due_date)=?",
 		"overdue":    " AND COALESCE(bd.next_due,i.due_date)<?",
@@ -96,6 +98,11 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		return
 	}
 	base += condition
+	if view == "week" {
+		now := time.Now().In(time.FixedZone("CST", 8*3600))
+		weekday := (int(now.Weekday()) + 6) % 7
+		args = append(args, today, now.AddDate(0, 0, 6-weekday).Format("2006-01-02"))
+	}
 	if view == "today" || view == "overdue" {
 		args = append(args, today)
 	}
@@ -107,7 +114,8 @@ func (h *ProductionWorkbenchHandler) List(c *gin.Context) {
 		}
 	}
 	var summary counts
-	if strings.TrimSpace(c.Query("search")) == "" {
+	_, metricView := metrics[view]
+	if strings.TrimSpace(c.Query("search")) == "" && metricView {
 		summary = metrics[view]
 	} else {
 		if err := h.db.Raw("SELECT COUNT(DISTINCT o.id) AS orders,COUNT(*) AS items,COALESCE(SUM(i.quantity),0) AS pieces"+base, args...).Scan(&summary).Error; err != nil {

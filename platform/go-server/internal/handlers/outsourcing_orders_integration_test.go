@@ -94,7 +94,32 @@ func TestOutsourcingOrdersIntegrationTemporaryTables(t *testing.T) {
 	create := func(item models.OrderItem, scope, request string, supplier int64, qty int, lines []outsourcing.OrderLineInput) (models.OutsourcingOrder, error) {
 		return outsourcing.CreateOrder(db, 0, 1, outsourcing.OrderInput{ItemID: item.ID, SupplierID: supplier, Scope: scope, Quantity: qty, UnitPrice: "2", Date: today, Expected: due.Format("2006-01-02"), RequestID: request, Lines: lines})
 	}
+
+	materialTypes := "material"
+	material, e := outsourcing.SaveSupplier(db, 0, 0, outsourcing.SupplierInput{Name: "原材料专供", Active: true, SupplierTypes: &materialTypes})
+	check(e)
+	multiTypes := "material,outsourcing,material"
+	multi, e := outsourcing.SaveSupplier(db, 0, 0, outsourcing.SupplierInput{Name: "多类供应商", Active: true, SupplierTypes: &multiTypes})
+	check(e)
+	if multi.SupplierTypes != "outsourcing,material" || a.SupplierTypes != "outsourcing" {
+		t.Fatal("type defaults/canonicalization lost")
+	}
+	multi, e = outsourcing.SaveSupplier(db, 0, multi.ID, outsourcing.SupplierInput{Name: multi.Name, Active: true})
+	check(e)
+	if multi.SupplierTypes != "outsourcing,material" {
+		t.Fatal("legacy edit erased supplier types")
+	}
+	invalidTypes := ""
+	_, e = outsourcing.SaveSupplier(db, 0, material.ID, outsourcing.SupplierInput{Name: material.Name, Active: true, SupplierTypes: &invalidTypes})
+	fail(e)
+	var materialCount int64
+	check(db.Model(&models.OutsourcingSupplier{}).Where("corp_id=? AND FIND_IN_SET(?,supplier_types)>0", 0, "material").Count(&materialCount).Error)
+	if materialCount != 2 {
+		t.Fatal("multi-category filter incorrect")
+	}
 	item, ps := newItem("PREORDER-SPLIT")
+	_, e = create(item, "selected", "material-not-outsourcing", material.ID, 0, []outsourcing.OrderLineInput{{ProcessID: ps[1].ID, Quantity: 1, UnitPrice: "1"}})
+	fail(e)
 	oa, e := create(item, "selected", "book-a", a.ID, 0, []outsourcing.OrderLineInput{{ProcessID: ps[1].ID, Quantity: 600, UnitPrice: "1"}})
 	check(e)
 	ob, e := create(item, "selected", "book-b", b.ID, 0, []outsourcing.OrderLineInput{{ProcessID: ps[1].ID, Quantity: 400, UnitPrice: "1.2"}})

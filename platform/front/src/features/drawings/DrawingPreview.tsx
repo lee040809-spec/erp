@@ -15,6 +15,7 @@ import workerURL from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { drawingBlob, PartDrawing } from "./api";
 import "./drawings.css";
 import { BundledPdfData } from "./pdfAssets";
+import DrawingPrintButton from "./DrawingPrintButton";
 export default function DrawingPreview({
   drawing,
   legacy,
@@ -41,9 +42,12 @@ export default function DrawingPreview({
   useEffect(() => {
     const target = frame.current;
     if (!target) return;
-    const observer = new ResizeObserver(() => setFrameWidth(target.clientWidth));
+    const observer = new ResizeObserver(() =>
+      setFrameWidth(target.clientWidth),
+    );
     observer.observe(target);
-    const changed = () => setFullscreen(document.fullscreenElement === container.current);
+    const changed = () =>
+      setFullscreen(document.fullscreenElement === container.current);
     document.addEventListener("fullscreenchange", changed);
     return () => {
       observer.disconnect();
@@ -175,16 +179,20 @@ export default function DrawingPreview({
       >
         <header>
           <div className="drawing-preview-title">
-            <strong title={drawing?.file_name || "原有零件图纸"}>{drawing?.file_name || "原有零件图纸"}</strong>
+            <strong title={drawing?.file_name || "原有零件图纸"}>
+              {drawing?.file_name || "原有零件图纸"}
+            </strong>
             <small>
               {drawing?.drawing_number && `图号 ${drawing.drawing_number} · `}
-              {drawing?.version && `版本 ${drawing.version} · `}
+              {drawing &&
+                `${drawing.is_current ? "当前生产图纸" : "历史 / 临时图纸"} · 版本 ${drawing.version || "未填写"} · `}
               {drawing && !drawing.is_current && drawing.order_item_id
                 ? "历史版本 · 请核对"
                 : ""}
             </small>
           </div>
-          <button data-escape-close
+          <button
+            data-escape-close
             type="button"
             className="erp-btn"
             aria-label="关闭图纸预览"
@@ -262,6 +270,14 @@ export default function DrawingPreview({
               </button>
             </>
           )}
+          <DrawingPrintButton
+            pdf={doc}
+            pageNumber={page}
+            imageUrl={isImage ? url : undefined}
+            title={`${drawing ? (drawing.is_current ? "当前生产图纸" : "历史 / 临时图纸") : "原有零件图纸"} · ${drawing?.version || "版本未填写"} · ${drawing?.file_name || "零件图纸"}`}
+            rotation={rotation}
+            disabled={busy || !!error}
+          />
           <button
             type="button"
             className="erp-btn"

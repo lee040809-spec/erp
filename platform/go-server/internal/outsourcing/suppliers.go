@@ -11,13 +11,14 @@ import (
 )
 
 type SupplierInput struct {
-	Name         string `json:"name"`
-	ContactName  string `json:"contact_name"`
-	Phone        string `json:"phone"`
-	Address      string `json:"address"`
-	Capabilities string `json:"capabilities"`
-	Notes        string `json:"notes"`
-	Active       bool   `json:"active"`
+	Name          string  `json:"name"`
+	ContactName   string  `json:"contact_name"`
+	Phone         string  `json:"phone"`
+	Address       string  `json:"address"`
+	Capabilities  string  `json:"capabilities"`
+	Notes         string  `json:"notes"`
+	Active        bool    `json:"active"`
+	SupplierTypes *string `json:"supplier_types"`
 }
 
 func SaveSupplier(db *gorm.DB, corp, id int64, in SupplierInput) (models.OutsourcingSupplier, error) {
@@ -33,6 +34,16 @@ func SaveSupplier(db *gorm.DB, corp, id int64, in SupplierInput) (models.Outsour
 			}
 		}
 		var n int64
+		types := out.SupplierTypes
+		if in.SupplierTypes != nil {
+			var err error
+			types, err = NormalizeSupplierTypes(*in.SupplierTypes)
+			if err != nil {
+				return err
+			}
+		} else if types == "" {
+			types = "outsourcing"
+		}
 		if e := tx.Model(&models.OutsourcingSupplier{}).Where("corp_id=? AND name=? AND id<>?", corp, in.Name, id).Count(&n).Error; e != nil {
 			return e
 		}
@@ -40,6 +51,7 @@ func SaveSupplier(db *gorm.DB, corp, id int64, in SupplierInput) (models.Outsour
 			return errors.New("本公司已有同名供应商，请编辑已有资料")
 		}
 		out.CorpID = corp
+		out.SupplierTypes = types
 		out.Name = in.Name
 		out.ContactName = strings.TrimSpace(in.ContactName)
 		out.Phone = strings.TrimSpace(in.Phone)
@@ -63,6 +75,9 @@ func activeSupplier(tx *gorm.DB, corp, id int64) (models.OutsourcingSupplier, er
 	}
 	if !s.Active {
 		return s, errors.New("该供应商已停用，不能新增订单或发出")
+	}
+	if !HasSupplierType(s.SupplierTypes, "outsourcing") {
+		return s, errors.New("该供应商未勾选外协类型，请在供应商管理中修改后重试")
 	}
 	return s, nil
 }

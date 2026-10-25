@@ -3,6 +3,7 @@ package workflowtest
 
 import (
 	"gorm.io/gorm"
+	"machining-erp/internal/accounting"
 	"machining-erp/internal/workflowmigration"
 	"strings"
 	"testing"
@@ -10,6 +11,26 @@ import (
 
 func Tables(t *testing.T, db *gorm.DB, temporaryParents ...string) {
 	t.Helper()
+	for _, ddl := range accounting.Tables {
+		if e := db.Exec(strings.Replace(ddl, "CREATE TABLE IF NOT EXISTS", "CREATE TEMPORARY TABLE", 1)).Error; e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, table := range temporaryParents {
+		if table == "production_completions" {
+			rows, e := db.Raw("SHOW COLUMNS FROM production_completions LIKE 'pricing_status'").Rows()
+			if e != nil {
+				t.Fatal(e)
+			}
+			has := rows.Next()
+			rows.Close()
+			if !has {
+				if e = db.Exec(accounting.PricingColumn).Error; e != nil {
+					t.Fatal(e)
+				}
+			}
+		}
+	}
 	for _, ddl := range workflowmigration.Tables {
 		if e := db.Exec(strings.Replace(ddl, "CREATE TABLE IF NOT EXISTS", "CREATE TEMPORARY TABLE", 1)).Error; e != nil {
 			t.Fatal(e)

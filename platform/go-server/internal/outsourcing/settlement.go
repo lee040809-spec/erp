@@ -3,6 +3,7 @@ package outsourcing
 import (
 	"errors"
 	"gorm.io/gorm"
+	"machining-erp/internal/accounting"
 	"machining-erp/internal/models"
 	"machining-erp/internal/productionflow"
 	"math/big"
@@ -58,11 +59,8 @@ func Settle(db *gorm.DB, corp, id, actor int64, in SettlementInput) (models.Outs
 	err = db.Transaction(func(tx *gorm.DB) error {
 		// Finance month before order/item locks, matching completion and month-closing writers.
 		month := date.Format("2006-01")
-		if e := tx.Exec("INSERT IGNORE INTO monthly_closings(corp_id,accounting_month,status,rule_version) VALUES (?,?,'open','v1')", corp, month).Error; e != nil {
-			return e
-		}
-		var closing string
-		if e := tx.Raw("SELECT status FROM monthly_closings WHERE corp_id=? AND accounting_month=? FOR UPDATE", corp, month).Scan(&closing).Error; e != nil {
+		closing, e := accounting.LockMonthStatus(tx, corp, month)
+		if e != nil {
 			return e
 		}
 		if closing == "closed" {

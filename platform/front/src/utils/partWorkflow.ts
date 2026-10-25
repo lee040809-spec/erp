@@ -15,7 +15,7 @@ export function nextPartAction(data: FlowData, priceReady?: boolean): {
     const processes = flow.processes.filter(p => p.name !== '送货');
     const ready = flow.tracking ? Number(flow.available_completion) > 0 : processes.length > 0 && processes.every(p => p.status === 'completed') && remaining > 0;
     if (ready)
-        return { step: 'completion', title: priceReady === false ? '加工已完成，请核对单价后确认合格' : '可确认本次合格数量', detail: priceReady === false ? '尚未录入有效单价，确认前需补录真实单价；不会按零产值入账。' : '工序完工和合格确认是两项记录。确认合格后自动计入对应月份产值，再登记交货。' };
+        return { step: 'completion', title: '可确认本次合格数量', detail: priceReady === false ? '可先确认合格并登记交货；金额标记待补价，补价后归原完工月份计产值。' : '工序完工和合格确认是两项记录。确认合格后自动计入对应月份产值，再登记交货。' };
     if (!processes.length)
         return { step: 'process', title: '先设置加工工序', detail: '在“修改 / 添加 / 删除工序”中设置工艺，再安排日期或登记开工。' };
     return { step: 'process', title: '继续安排或登记加工', detail: flow.tracking ? '逐道登记本次开工、完工或报废数量；前道部分完工后，后道即可安排开工。' : '选中工序，安排计划日期或点击“现在开工 / 现在完工”；只记录实际发生的加工。' };

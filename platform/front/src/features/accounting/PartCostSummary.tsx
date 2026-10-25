@@ -35,23 +35,29 @@ export default function PartCostSummary({
   ];
   const total = values.reduce((n, [, value]) => n + Number(value || 0), 0);
   return (
-    <div
+    <details
       aria-label="订单填写费用"
-      className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs flex flex-wrap items-center gap-x-5 gap-y-2"
+      className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
     >
-      <span className="text-slate-500">订单填写费用</span>
-      {values.map(([label, value]) => (
-        <span key={String(label)} className="text-slate-500">
-          {label}{" "}
-          <strong className="font-medium text-slate-800">
-            {financeAmount(value)}
-          </strong>
+      <summary className="cursor-pointer text-slate-500">
+        订单填写费用 · {showDirect && showOutsourcing ? "合计" : "可见小计"}{" "}
+        {financeAmount(total)}{" "}
+        <span className="text-slate-400">展开明细（参考）</span>
+      </summary>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-2">
+        {values.map(([label, value]) => (
+          <span key={String(label)} className="text-slate-500">
+            {label}{" "}
+            <strong className="font-medium text-slate-800">
+              {financeAmount(value)}
+            </strong>
+          </span>
+        ))}
+        <span className="text-blue-700 font-semibold">
+          {showDirect && showOutsourcing ? "费用合计" : "可见费用小计"}{" "}
+          {financeAmount(total)}
         </span>
-      ))}
-      <span className="text-blue-700 font-semibold">
-        {showDirect && showOutsourcing ? "费用合计" : "可见费用小计"}{" "}
-        {financeAmount(total)}
-      </span>
-    </div>
+      </div>
+    </details>
   );
 }

@@ -7,6 +7,10 @@ import { flowRequest } from "../services/productionFlow";
 import { useAsyncResource } from "../hooks/useAsyncResource";
 import { useDraftGuard } from "../hooks/useDraftGuard";
 import SupplierEditor from "../components/SupplierEditor";
+import {
+  SUPPLIER_TYPES,
+  supplierTypeLabels,
+} from "../features/suppliers/supplierTypes";
 
 const initial: SupplierPage = {
   items: [],
@@ -19,6 +23,7 @@ export default function OutsourcingSuppliers({
 }: {
   embedded?: boolean;
 }) {
+  const [type, setType] = useState("");
   const [page, setPage] = useState(1),
     [search, setSearch] = useState(""),
     [query, setQuery] = useState("");
@@ -31,9 +36,9 @@ export default function OutsourcingSuppliers({
   const request = useCallback(
     () =>
       flowRequest<SupplierPage>(
-        `/outsourcing-suppliers?page=${page}&pageSize=30&search=${encodeURIComponent(query)}`,
+        `/outsourcing-suppliers?page=${page}&pageSize=30&supplier_type=${encodeURIComponent(type)}&search=${encodeURIComponent(query)}`,
       ),
-    [page, query],
+    [page, query, type],
   );
   const { data, loading, error, reload } = useAsyncResource(request, initial);
   const editorSession = `${editing?.id || "new"}:${editorRevision}`;
@@ -42,12 +47,13 @@ export default function OutsourcingSuppliers({
     if (!guard.confirmDiscard()) return;
     guard.reset();
     setEditing(supplier);
-    setEditorRevision(value => value + 1);
+    setEditorRevision((value) => value + 1);
     setMessage("");
   };
   const clear = () => {
     setSearch("");
-    if (!query && page === 1) void reload();
+    setType("");
+    if (!query && !type && page === 1) void reload();
     else {
       setQuery("");
       setPage(1);
@@ -59,9 +65,9 @@ export default function OutsourcingSuppliers({
     >
       <header className="flex flex-wrap justify-between items-center gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">外协供应商管理</h2>
+          <h2 className="text-xl font-bold text-slate-900">供应商管理</h2>
           <p className="text-xs text-slate-500 mt-1">
-            维护联系人和加工能力；停用后保留历史订单、回厂与对账记录。
+            统一维护外协、原材料、刀具等供应商，一家可选多种类型；停用后保留历史业务记录。
           </p>
         </div>
         <div className="flex gap-2">
@@ -100,10 +106,27 @@ export default function OutsourcingSuppliers({
           }
         }}
       >
+        <select
+          className="erp-input w-full sm:w-36"
+          aria-label="供应商类型筛选"
+          value={type}
+          disabled={saving}
+          onChange={(event) => {
+            setType(event.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">全部类型</option>
+          {SUPPLIER_TYPES.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
         <input
           className="erp-input flex-1 min-w-0"
           aria-label="搜索供应商"
-          placeholder="供应商 / 联系人 / 电话 / 加工能力"
+          placeholder="供应商 / 联系人 / 电话 / 供应内容"
           value={search}
           disabled={saving}
           onChange={(e) => setSearch(e.target.value)}
@@ -111,7 +134,7 @@ export default function OutsourcingSuppliers({
         <button className="erp-btn" disabled={loading || saving}>
           查询
         </button>
-        {(query || search) && (
+        {(query || search || type) && (
           <button
             type="button"
             className="erp-btn"
@@ -185,12 +208,15 @@ export default function OutsourcingSuppliers({
                       {supplier.active ? "启用" : "停用"}
                     </span>
                   </div>
+                  <p className="text-xs font-medium text-blue-700">
+                    {supplierTypeLabels(supplier.supplier_types)}
+                  </p>
                   <p className="text-xs text-slate-600 break-words">
                     {supplier.contact_name || "未填联系人"} ·{" "}
                     {supplier.phone || "未填电话"}
                   </p>
                   <p className="text-xs text-slate-500 break-words">
-                    加工能力：{supplier.capabilities || "未填写"}
+                    供应内容 / 加工能力：{supplier.capabilities || "未填写"}
                   </p>
                   {supplier.address && (
                     <p className="text-xs text-slate-500 break-words">
@@ -217,7 +243,7 @@ export default function OutsourcingSuppliers({
             </div>
             {!data.items.length && (
               <p role="status" className="text-sm text-slate-500">
-                {query
+                {query || type
                   ? "没有找到符合条件的供应商，可清除关键词重新查询。"
                   : "暂无供应商资料。"}
               </p>

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"machining-erp/internal/accounting"
 	"machining-erp/internal/productionflow"
 	"net/http"
 	"regexp"
@@ -109,16 +110,12 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 	}
 	defer tx.Rollback()
 	// Serialize import and month closing using the same month row.
-	if err = tx.Exec("INSERT IGNORE INTO monthly_closings (corp_id,accounting_month,status,rule_version) VALUES (?,?,'open','v1')", corpID, month).Error; err != nil {
+	closing, err := accounting.LockMonthStatus(tx, corpID, month)
+	if err != nil {
 		response.InternalError(c, response.CodeInternal, "检查月结失败")
 		return
 	}
-	var closing struct{ Status string }
-	if err = tx.Raw("SELECT status FROM monthly_closings WHERE corp_id=? AND accounting_month=? FOR UPDATE", corpID, month).Scan(&closing).Error; err != nil {
-		response.InternalError(c, response.CodeInternal, "检查月结失败")
-		return
-	}
-	if closing.Status == "closed" {
+	if closing == "closed" {
 		response.BadRequest(c, response.CodeInvalidRequest, "该月份已结账，不能导入")
 		return
 	}
@@ -143,7 +140,7 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 		Currency           string
 		TaxInclusive       bool
 	}
-	err = tx.Raw("SELECT order_id,quantity,COALESCE(NULLIF(production_quantity,0),quantity) AS production_quantity,COALESCE(scrap_quantity,0) AS scrap_quantity,status,CAST(unit_price AS CHAR) AS unit_price,COALESCE(supply_mode,'self_purchased') AS supply_mode,COALESCE(currency,'CNY') AS currency,tax_inclusive FROM order_items WHERE id=? AND corp_id=? FOR UPDATE", req.ItemID, corpID).Scan(&item).Error
+	err = tx.Raw("SELECT order_id,quantity,COALESCE(NULLIF(production_quantity,0),quantity) AS production_quantity,COALESCE(scrap_quantity,0) AS scrap_quantity,status,CAST(COALESCE(unit_price,0) AS CHAR) AS unit_price,COALESCE(supply_mode,'self_purchased') AS supply_mode,COALESCE(currency,'CNY') AS currency,tax_inclusive FROM order_items WHERE id=? AND corp_id=? FOR UPDATE", req.ItemID, corpID).Scan(&item).Error
 	if err != nil || item.OrderID == 0 {
 		response.ErrorWithCode(c, http.StatusNotFound, response.CodeNotFound, "零件不存在")
 		return
@@ -162,7 +159,7 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 		response.BadRequest(c, response.CodeInvalidRequest, "仅可导入历史已完工或已交货零件")
 		return
 	}
-	if !positiveDecimal(item.UnitPrice) || !sameDecimal(item.UnitPrice, req.ExpectedPrice) || item.Currency != "CNY" {
+	if !sameDecimal(item.UnitPrice, req.ExpectedPrice) || item.Currency != "CNY" {
 		response.BadRequest(c, response.CodeInvalidRequest, "单价缺失、已变化或币种不是人民币，请刷新并核对订单")
 		return
 	}
@@ -170,8 +167,16 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 	if req.ConfirmedPrice != "" {
 		price = req.ConfirmedPrice
 	}
-	if !regexp.MustCompile(`^\d{1,11}(\.\d{1,4})?$`).MatchString(price) || !positiveDecimal(price) {
-		response.BadRequest(c, response.CodeInvalidRequest, "审核单价必须大于0，最多11位整数和4位小数")
+	if !validNonnegativePrice(price) {
+		response.BadRequest(c, response.CodeInvalidRequest, "单价格式无效；未填单价时可先登记合格，最多11位整数和4位小数")
+		return
+	}
+	pricingStatus := "priced"
+	if !positiveDecimal(price) {
+		pricingStatus = "pending"
+	}
+	if pricingStatus == "pending" && positiveDecimal(item.UnitPrice) {
+		response.BadRequest(c, response.CodeInvalidRequest, "订单已有单价，请核对本批单价；留空可沿用订单单价，不能将已知价格当作零价")
 		return
 	}
 	number := fmt.Sprintf("HISTORY-%d", req.ItemID)
@@ -214,8 +219,8 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 		return
 	}
 	billable := max(0, min(float64(req.Quantity), float64(item.Quantity)-prior.Billable))
-	err = tx.Exec(`INSERT INTO production_completions (corp_id,order_id,order_item_id,completion_no,business_date,qualified_quantity,billable_quantity,unit_price_snapshot,output_value,supply_mode_snapshot,currency,tax_inclusive,status,notes,created_by,confirmed_at,created_at)
- VALUES (?,?,?,?,?,?,?,?,ROUND(?*CAST(? AS DECIMAL(15,4)),2),?,?,?,'confirmed',?,?,NOW(3),NOW(3))`, corpID, item.OrderID, req.ItemID, number, req.Date, req.Quantity, billable, price, billable, price, item.SupplyMode, item.Currency, item.TaxInclusive, notes, middleware.GetUserID(c)).Error
+	err = tx.Exec(`INSERT INTO production_completions (corp_id,order_id,order_item_id,completion_no,business_date,qualified_quantity,billable_quantity,unit_price_snapshot,output_value,supply_mode_snapshot,currency,tax_inclusive,status,pricing_status,notes,created_by,confirmed_at,created_at)
+ VALUES (?,?,?,?,?,?,?,?,ROUND(?*CAST(? AS DECIMAL(15,4)),2),?,?,?,'confirmed',?,?,?,NOW(3),NOW(3))`, corpID, item.OrderID, req.ItemID, number, req.Date, req.Quantity, billable, price, billable, price, item.SupplyMode, item.Currency, item.TaxInclusive, pricingStatus, notes, middleware.GetUserID(c)).Error
 	if err != nil {
 		response.InternalError(c, response.CodeInternal, "保存历史完工失败")
 		return
@@ -260,7 +265,7 @@ func (h *ProductionFinanceHandler) FinanceDetails(c *gin.Context) {
 	rows := make([]map[string]interface{}, 0)
 	err := h.db.Raw(`SELECT p.id,p.completion_no,p.order_item_id,o.order_number,COALESCE(o.customer_name,'') AS customer_name,i.part_name,
  DATE_FORMAT(p.business_date,'%Y-%m-%d') AS business_date,CAST(p.qualified_quantity AS CHAR) AS qualified_quantity, CAST(p.billable_quantity AS CHAR) AS billable_quantity, CAST(p.qualified_quantity-p.billable_quantity AS CHAR) AS reserve_quantity,
- CAST(p.unit_price_snapshot AS CHAR) AS unit_price_snapshot,CAST(p.output_value AS CHAR) AS output_value,p.supply_mode_snapshot,p.notes
+ CAST(p.unit_price_snapshot AS CHAR) AS unit_price_snapshot,CAST(p.output_value AS CHAR) AS output_value,p.pricing_status,p.supply_mode_snapshot,p.notes
  FROM production_completions p LEFT JOIN orders o ON o.id=p.order_id AND o.corp_id=p.corp_id
  LEFT JOIN order_items i ON i.id=p.order_item_id AND i.corp_id=p.corp_id
  WHERE p.corp_id=? AND p.status='confirmed' AND p.business_date>=? AND p.business_date<DATE_ADD(?,INTERVAL 1 MONTH)

@@ -1,3 +1,4 @@
+import CostCompletionPicker from "../features/accounting/CostCompletionPicker";
 import { businessToday } from "../utils/businessDate";
 import CostOrderPicker from "../features/accounting/CostOrderPicker";
 import React, { useRef, useState } from "react";
@@ -6,7 +7,7 @@ import { createCostEntryApi } from "../services/api";
 
 interface CostEntryModalProps {
   onClose: () => void;
-  onSuccess: (costType: string) => void;
+  onSuccess: (costType: string, allocated?: boolean, month?: string) => void;
 }
 
 const costTypes = [
@@ -35,6 +36,9 @@ const CostEntryModal: React.FC<CostEntryModalProps> = ({
     supplier_name: "",
     notes: "",
   });
+  const [completion, setCompletion] = useState("");
+  const [completionMonth, setCompletionMonth] = useState("");
+  const request = useRef({ signature: "", id: "" });
   const [saving, setSaving] = useState(false);
   const busy = useRef(false);
   const [error, setError] = useState("");
@@ -62,7 +66,16 @@ const CostEntryModal: React.FC<CostEntryModalProps> = ({
     setSaving(true);
     setError("");
     try {
+      const signature = JSON.stringify([form, completion, taxInCost]);
+      if (request.current.signature !== signature)
+        request.current = { signature, id: crypto.randomUUID() };
       await createCostEntryApi({
+        request_id: request.current.id,
+        auto_allocate: !!completion && form.cost_type !== "period",
+        production_completion_id:
+          completion && form.cost_type !== "period"
+            ? Number(completion)
+            : undefined,
         cost_type: form.cost_type,
         amount: form.amount,
         tax_amount: form.tax_amount || "0.00",
@@ -75,7 +88,13 @@ const CostEntryModal: React.FC<CostEntryModalProps> = ({
         supplier_name: form.supplier_name.trim() || undefined,
         notes: form.notes.trim() || undefined,
       });
-      onSuccess(form.cost_type);
+      onSuccess(
+        form.cost_type,
+        !!completion && form.cost_type !== "period",
+        completion && form.cost_type !== "period"
+          ? completionMonth
+          : form.business_date.slice(0, 7),
+      );
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "成本费用保存失败");
@@ -85,8 +104,13 @@ const CostEntryModal: React.FC<CostEntryModalProps> = ({
     }
   };
 
-  const set = (key: keyof typeof form, value: string) =>
+  const set = (key: keyof typeof form, value: string) => {
+    if (key === "cost_type") {
+      setCompletion("");
+      setCompletionMonth("");
+    }
     setForm((current) => ({ ...current, [key]: value }));
+  };
 
   return (
     <div
@@ -176,10 +200,24 @@ const CostEntryModal: React.FC<CostEntryModalProps> = ({
               </label>
             </div>
             <CostOrderPicker
-              onPick={(order_id, order_item_id) =>
-                setForm((current) => ({ ...current, order_id, order_item_id }))
-              }
+              onPick={(order_id, order_item_id) => {
+                setCompletion("");
+                setCompletionMonth("");
+                setForm((current) => ({ ...current, order_id, order_item_id }));
+              }}
             />
+            {form.order_item_id && form.cost_type !== "period" && (
+              <CostCompletionPicker
+                key={form.order_item_id}
+                itemId={Number(form.order_item_id)}
+                value={completion}
+                onChange={(id, month) => {
+                  setCompletion(id);
+                  setCompletionMonth(month || "");
+                }}
+              />
+            )}
+
             <details className="rounded-xl border p-3">
               <summary className="cursor-pointer text-sm">
                 税额处理（需要单独处理税额时展开）
@@ -225,7 +263,9 @@ const CostEntryModal: React.FC<CostEntryModalProps> = ({
             <p className="text-sm text-blue-800">
               {form.cost_type === "period"
                 ? "这笔其他经营费用按发生月份直接汇总，无需分配到零件。"
-                : "保存后，请把这笔生产费用计入对应零件的完工记录，预计结余才会扣除。"}
+                : completion
+                  ? "本次保存费用后，同时计入所选完工批次的月份，只扣减一次；不会再生成第二笔费用。"
+                  : "暂不指定完工批次时，先保存费用，之后再分配到零件；预计结余按分配后的金额扣除。"}
             </p>
             <label className="block">
               <span className="text-sm font-medium">备注</span>
@@ -252,7 +292,9 @@ const CostEntryModal: React.FC<CostEntryModalProps> = ({
                 className="h-10 px-4 bg-zinc-900 text-white text-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                保存成本费用
+                {completion && form.cost_type !== "period"
+                  ? "保存并计入零件"
+                  : "保存成本费用"}
               </button>
             </div>
           </fieldset>

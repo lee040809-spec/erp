@@ -192,7 +192,7 @@ export default function FinanceReviewPanel({
       date: item.business_date || "",
       notes: "",
       sourceRef: "",
-      price: item.unit_price || "",
+      price: Number(item.unit_price) > 0 ? item.unit_price : "",
       reviewed: false,
     });
   };
@@ -389,7 +389,6 @@ export default function FinanceReviewPanel({
                       </td>
                       <td className="p-3">
                         {access?.can_import_history &&
-                        Number(item.unit_price) > 0 &&
                         item.currency === "CNY" &&
                         item.remaining_quantity > 0 ? (
                           <button

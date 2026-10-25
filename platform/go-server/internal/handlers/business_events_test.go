@@ -199,16 +199,16 @@ func TestBusinessEventsTemporaryTables(t *testing.T) {
 	call(h.Create, detectorEvent, orderParams, "/", 400)
 	detectorCompletion := map[string]interface{}{"qualified_quantity": 1, "business_date": "2026-07-03", "request_id": "detector-qualified"}
 	detectorParams := gin.Params{{Key: "itemId", Value: "4"}}
-	missingPrice := call(f.CreateCompletion, detectorCompletion, detectorParams, "/", 400)
-	if !strings.Contains(fmt.Sprint(missingPrice), "单价") {
-		t.Fatal("missing price not explained")
+	missingPrice := call(f.CreateCompletion, detectorCompletion, detectorParams, "/", 200)
+	if missingPrice["data"].(map[string]interface{})["pricing_status"] != "pending" {
+		t.Fatal("missing price must remain pending")
 	}
 	var count int64
 	check(db.Table("production_completions").Where("order_item_id=4").Count(&count).Error)
-	if count != 0 {
-		t.Fatal("missing price silently entered as zero output")
+	if count != 1 {
+		t.Fatal("missing price qualified count was not recorded")
 	}
-	exec("UPDATE order_items SET unit_price=80 WHERE id=4")
+	call(f.PriceCompletion, map[string]interface{}{"unit_price": "80"}, detectorParams, "/", 200)
 	call(f.CreateCompletion, detectorCompletion, detectorParams, "/", 200)
 	call(f.CreateCompletion, detectorCompletion, detectorParams, "/", 200)
 	detector = findDetector()

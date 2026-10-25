@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { X, Download } from 'lucide-react';
+import DrawingPrintButton from '../features/drawings/DrawingPrintButton';
 
 interface DrawingViewerModalProps {
   show: string | null;
@@ -28,6 +29,7 @@ const DrawingViewerModal: React.FC<DrawingViewerModalProps> = ({ show, onClose }
         <div className="p-4 border-b border-zinc-100 flex items-center justify-between">
           <h3 className="font-bold">图纸预览</h3>
           <div className="flex gap-2">
+            <DrawingPrintButton imageUrl={show} title="零件图纸" />
             <button className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500">
               <Download className="w-5 h-5" />
             </button>

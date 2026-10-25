@@ -48,7 +48,15 @@ export function reconciliationWorkbook(workbook: any, date?: string) {
           continue;
         const inline = /^(\s*对账日期\s*[:：]?\s*)\d{4}[-/]\d{1,2}[-/]\d{1,2}/;
         if (inline.test(cell.v)) {
-          set(sheet, row, col, cell.v.replace(inline, (_match: string, prefix: string) => prefix + date));
+          set(
+            sheet,
+            row,
+            col,
+            cell.v.replace(
+              inline,
+              (_match: string, prefix: string) => prefix + date,
+            ),
+          );
           continue;
         }
         for (const next of Object.keys(cells)

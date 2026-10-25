@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"machining-erp/internal/accounting"
 	"machining-erp/internal/middleware"
 	"machining-erp/internal/models"
 	"machining-erp/internal/productionflow"
@@ -127,14 +128,11 @@ func correctionMonths(tx *gorm.DB, corp, item int64, kind, date string) ([]strin
 func lockCorrectionMonths(tx *gorm.DB, corp int64, months []string) (map[string]bool, error) {
 	closed := map[string]bool{}
 	for _, m := range months {
-		if err := tx.Exec("INSERT IGNORE INTO monthly_closings (corp_id,accounting_month,status,rule_version) VALUES (?,?,'open','v1')", corp, m).Error; err != nil {
+		status, err := accounting.LockMonthStatus(tx, corp, m)
+		if err != nil {
 			return nil, err
 		}
-		var row struct{ Status string }
-		if err := tx.Raw("SELECT status FROM monthly_closings WHERE corp_id=? AND accounting_month=? FOR UPDATE", corp, m).Scan(&row).Error; err != nil {
-			return nil, err
-		}
-		closed[m] = row.Status == "closed"
+		closed[m] = status == "closed"
 	}
 	return closed, nil
 }
@@ -148,6 +146,9 @@ func matchesCorrection(req recordCorrectionRequest, quantity, date string) error
 	return nil
 }
 func correctDelivery(tx *gorm.DB, item models.OrderItem, id int64, req recordCorrectionRequest, date time.Time, audit *models.ProductionRecordChange) error {
+	if err := accounting.RequireUnreconciled(tx, item.CorpID, id); err != nil {
+		return err
+	}
 	var row BusinessRecord
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=? AND corp_id=? AND order_item_id=? AND kind='delivery' AND status='confirmed'", id, item.CorpID, item.ID).Take(&row).Error; err != nil {
 		return errors.New("交货记录不存在或已撤销")

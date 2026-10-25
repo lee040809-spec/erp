@@ -63,12 +63,16 @@ export default function ResponsiveTable({
       if (row.type !== "tr") return row;
       let column = 0;
       return cloneElement(row, {
-        children: Children.map(flatCells(row.props.children), (cell) => {
-          if (!isValidElement<CellProps>(cell) || cell.type !== "td")
-            return cell;
+        children: flatCells(row.props.children).map((cell,index) => {
+          if (!isValidElement<CellProps>(cell)) return cell;
+          // Flattened fragments can carry identical React-generated keys (.0/.2).
+          // Columns have stable positions within each keyed business row.
+          const key=`column-${index}`;
+          if(cell.type!=="td") return cloneElement(cell,{key});
           const label = labels[column];
           column += cell.props.colSpan || 1;
           return cloneElement(cell, {
+            key,
             "data-label":
               cell.props.colSpan && cell.props.colSpan > 1 ? undefined : label,
             "data-full-width": Boolean(

@@ -46,6 +46,8 @@ func (h *ProductionFinanceHandler) GetSummary(c *gin.Context) {
 		m.ReserveQuantity = p.Reserve
 		m.CompletionCount = p.Count
 		m.OutputValue = p.Output
+		m.PendingPricingCount = p.PendingCount
+		m.PendingPricingQuantity = p.PendingQuantity
 	}
 	for _, s := range s.Costs {
 		m := get(s.Month)

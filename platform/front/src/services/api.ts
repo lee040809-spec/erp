@@ -30,8 +30,8 @@ export const fetchFinanceSummaryApi = async (year: string): Promise<FinanceSumma
   return result.data;
 };
 
-export const fetchCompletionsApi = async (itemId: number): Promise<CompletionListResponse> => {
-  const res = await authFetch(`/api/platform/order-items/${itemId}/completions`);
+export const fetchCompletionsApi = async (itemId: number, page=1): Promise<CompletionListResponse> => {
+  const res = await authFetch(`/api/platform/order-items/${itemId}/completions${page>1?`?page=${page}`:''}`);
   const result = await res.json();
   if (!res.ok) {
     throw new Error(result.message || result.error || '完工记录加载失败');
@@ -57,6 +57,9 @@ export const createCompletionApi = async (itemId: number, payload: {
 };
 
 export const createCostEntryApi = async (payload: {
+ auto_allocate?:boolean;
+ production_completion_id?:number;
+ request_id?:string;
   cost_type: string;
   amount: string;
   tax_amount?: string;

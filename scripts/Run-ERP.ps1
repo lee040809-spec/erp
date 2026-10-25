@@ -25,6 +25,7 @@ try {
         $env:MYSQL_PORT = '3306'
         $env:MYSQL_USER = 'appuser'
         $env:MYSQL_DATABASE = 'platform_test'
+        $env:ERP_BACKUP_STATUS_FILE = Join-Path $erpRuntimeRoot 'backup-status.json'
         $env:MYSQL_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($erpPasswordPointer)
         $erpBackendProcess = Start-Process -FilePath $erpBackendExe -WorkingDirectory $erpBackendRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $erpRuntimeRoot "backend-$erpRunStamp.log") -RedirectStandardError (Join-Path $erpRuntimeRoot "backend-$erpRunStamp.err.log")
     } finally {

@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"machining-erp/internal/accounting"
 	"machining-erp/internal/middleware"
 	"machining-erp/internal/models"
 	"machining-erp/internal/outsourcing"
@@ -104,7 +105,7 @@ func (h *BusinessEventHandler) List(c *gin.Context) {
 	}
 	records, recordsMore := trimPage(records, size)
 	completions, completionsMore := trimPage(completions, size)
-	response.Success(c, gin.H{"page": page, "page_size": size, "has_more": recordsMore || completionsMore, "completions": completions, "items": rows, "records": records, "can_complete": canConfirmProduction(h.db, c), "can_scrap": h.can(c, "scrap"), "can_delivery": h.can(c, "delivery"), "can_exception": h.can(c, "exception"), "can_reverse": middleware.GetRoleType(c) == "admin", "evidence": policy})
+	response.Success(c, gin.H{"page": page, "page_size": size, "has_more": recordsMore || completionsMore, "completions": completions, "items": rows, "records": records, "can_price": hasModuleAccess(h.db, c, "orders"), "can_complete": canConfirmProduction(h.db, c), "can_scrap": h.can(c, "scrap"), "can_delivery": h.can(c, "delivery"), "can_exception": h.can(c, "exception"), "can_reverse": middleware.GetRoleType(c) == "admin", "evidence": policy})
 }
 
 type businessRequest struct {
@@ -360,6 +361,11 @@ func (h *BusinessEventHandler) Reverse(c *gin.Context) {
 		}
 		if err := tx.Where("id=? AND corp_id=?", id, corp).Take(&row).Error; err != nil {
 			return err
+		}
+		if row.Kind == "delivery" {
+			if e := accounting.RequireUnreconciled(tx, corp, id); e != nil {
+				return e
+			}
 		}
 		if row.Status != "confirmed" {
 			return errors.New("记录已经冲销")

@@ -1,15 +1,17 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"machining-erp/internal/accounting"
 	"machining-erp/internal/outsourcing"
 	"machining-erp/internal/productionflow"
 	"math/big"
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"machining-erp/internal/middleware"
@@ -197,9 +199,13 @@ FROM order_items WHERE id = ? AND corp_id = ? FOR UPDATE`, itemID, corpID).Scan(
 			return
 		}
 	}
-	if !item.UnitPrice.Valid || strings.TrimSpace(item.UnitPrice.String) == "" || !positiveDecimal(item.UnitPrice.String) || item.Currency != "CNY" {
-		response.BadRequest(c, response.CodeInvalidRequest, "零件单价尚未录入或无效，请先在编辑订单中填写大于0的人民币单价，再确认合格完工")
+	if item.Currency != "CNY" {
+		response.BadRequest(c, response.CodeInvalidRequest, "请先核对人民币结算币种")
 		return
+	}
+	pricingStatus, price := "priced", item.UnitPrice.String
+	if !item.UnitPrice.Valid || !positiveDecimal(price) {
+		pricingStatus, price = "pending", "0"
 	}
 	if e := productionflow.CompletionReady(tx, corpID, itemID, req.QualifiedQuantity, req.DeliveryBatchID, req.BusinessDate); e != nil {
 		response.BadRequest(c, response.CodeInvalidRequest, e.Error())
@@ -240,11 +246,11 @@ FROM order_items WHERE id = ? AND corp_id = ? FOR UPDATE`, itemID, corpID).Scan(
 	result := tx.Exec(`INSERT INTO production_completions
 (delivery_batch_id, corp_id, order_id, order_item_id, completion_no, business_date, qualified_quantity, billable_quantity,
  unit_price_snapshot, output_value, supply_mode_snapshot, currency, tax_inclusive,
- status, notes, created_by, confirmed_at, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(? * CAST(? AS DECIMAL(15,4)), 2), ?, ?, ?, 'confirmed', ?, ?, NOW(3), NOW(3))`,
+ status, pricing_status, notes, created_by, confirmed_at, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ROUND(? * CAST(? AS DECIMAL(15,4)), 2), ?, ?, ?, 'confirmed', ?, ?, ?, NOW(3), NOW(3))`,
 		req.DeliveryBatchID, corpID, item.OrderID, itemID, completionNo, req.BusinessDate, req.QualifiedQuantity, billable,
-		item.UnitPrice.String, billable, item.UnitPrice.String, item.SupplyMode,
-		item.Currency, item.TaxInclusive, req.Notes, userID)
+		price, billable, price, item.SupplyMode,
+		item.Currency, item.TaxInclusive, pricingStatus, req.Notes, userID)
 	if result.Error != nil {
 		response.InternalError(c, response.CodeInternal, "保存完工记录失败")
 		return
@@ -297,6 +303,8 @@ func (h *ProductionFinanceHandler) CreateCostEntry(c *gin.Context) {
 		return
 	}
 	var req struct {
+		RequestID              string  `json:"request_id"`
+		AutoAllocate           bool    `json:"auto_allocate"`
 		CostType               string  `json:"cost_type"`
 		Amount                 string  `json:"amount"`
 		TaxAmount              string  `json:"tax_amount"`
@@ -347,6 +355,37 @@ func (h *ProductionFinanceHandler) CreateCostEntry(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	var requestHash string
+	if req.RequestID != "" {
+		if !productionflow.RequestID(req.RequestID) {
+			response.BadRequest(c, response.CodeInvalidRequest, "请求编号无效")
+			return
+		}
+		raw, _ := json.Marshal(req)
+		requestHash = fmt.Sprintf("%x", sha256.Sum256(raw))
+		var replay struct {
+			RequestHash string
+			CostEntryID int64
+		}
+		found := tx.Table("cost_entry_requests").Where("corp_id=? AND request_id=?", corpID, req.RequestID).Take(&replay).Error
+		if found == nil {
+			if replay.RequestHash != requestHash {
+				response.BadRequest(c, response.CodeInvalidRequest, "请求编号已使用，费用内容不一致")
+				return
+			}
+			var entry models.CostEntry
+			if tx.Where("corp_id=? AND id=?", corpID, replay.CostEntryID).Take(&entry).Error != nil {
+				response.InternalError(c, response.CodeInternal, "读取已登记费用失败")
+				return
+			}
+			response.SuccessWithMessage(c, "该费用已保存，无需重复登记", entry)
+			return
+		}
+		if found != gorm.ErrRecordNotFound {
+			response.InternalError(c, response.CodeInternal, "检查费用重复请求失败")
+			return
+		}
+	}
 	if !lockFinanceMonth(tx, c, corpID, month) {
 		return
 	}
@@ -364,6 +403,21 @@ func (h *ProductionFinanceHandler) CreateCostEntry(c *gin.Context) {
 	if err := tx.Create(&entry).Error; err != nil {
 		response.InternalError(c, response.CodeInternal, "保存成本记录失败")
 		return
+	}
+	if req.AutoAllocate {
+		if req.CostType == "period" || req.ProductionCompletionID == nil {
+			response.BadRequest(c, response.CodeInvalidRequest, "请选择要计入的合格完工批次")
+			return
+		}
+		if !allocateCost(tx, c, corpID, costAllocationRequest{CostID: entry.ID, CompletionID: *req.ProductionCompletionID, Amount: req.NetAmount, Basis: "单零件实际费用"}) {
+			return
+		}
+	}
+	if req.RequestID != "" {
+		if e := tx.Exec("INSERT INTO cost_entry_requests(corp_id,request_id,request_hash,cost_entry_id) VALUES (?,?,?,?)", corpID, req.RequestID, requestHash, entry.ID).Error; e != nil {
+			response.BadRequest(c, response.CodeInvalidRequest, "相同费用正在提交，请稍后重试，系统会核对原结果")
+			return
+		}
 	}
 	if tx.Commit().Error != nil {
 		response.InternalError(c, response.CodeInternal, "提交费用事务失败")
@@ -430,6 +484,15 @@ func (h *ProductionFinanceHandler) CloseMonth(c *gin.Context) {
 	if !lockFinanceMonth(tx, c, corpID, month) {
 		return
 	}
+	var unpriced int64
+	if e := tx.Table("production_completions").Where("corp_id=? AND status='confirmed' AND pricing_status='pending' AND DATE_FORMAT(business_date,'%Y-%m')<=?", corpID, month).Count(&unpriced).Error; e != nil {
+		response.InternalError(c, response.CodeInternal, "检查待补价数量失败")
+		return
+	}
+	if unpriced > 0 {
+		response.BadRequest(c, response.CodeInvalidRequest, "本月或更早月份仍有待补价合格记录，请补价后再核对锁定")
+		return
+	}
 	var pending int64
 	err := tx.Raw(`SELECT COUNT(*) FROM cost_entries e LEFT JOIN
 (SELECT cost_entry_id,corp_id,SUM(allocated_amount) AS total FROM cost_allocations GROUP BY corp_id,cost_entry_id) a ON a.cost_entry_id=e.id AND a.corp_id=e.corp_id
@@ -451,16 +514,12 @@ WHERE e.corp_id=? AND e.status='confirmed' AND e.cost_type<>'period' AND e.accou
 }
 
 func lockFinanceMonth(tx *gorm.DB, c *gin.Context, corpID int64, month string) bool {
-	if tx.Exec("INSERT IGNORE INTO monthly_closings (corp_id,accounting_month,status,rule_version) VALUES (?,?,'open','v1')", corpID, month).Error != nil {
-		response.InternalError(c, response.CodeInternal, "创建月份锁失败")
-		return false
-	}
-	var row struct{ Status string }
-	if tx.Raw("SELECT status FROM monthly_closings WHERE corp_id=? AND accounting_month=? FOR UPDATE", corpID, month).Scan(&row).Error != nil {
+	status, err := accounting.LockMonthStatus(tx, corpID, month)
+	if err != nil {
 		response.InternalError(c, response.CodeInternal, "检查月份锁失败")
 		return false
 	}
-	if row.Status == "closed" {
+	if status == "closed" {
 		response.BadRequest(c, response.CodeInvalidRequest, "该月份已结账，不能新增或更改核算记录")
 		return false
 	}

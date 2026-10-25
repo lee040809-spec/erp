@@ -43,6 +43,7 @@ interface RecordRow {
     created_by: number;
 }
 export interface BusinessData {
+ can_price?: boolean;
     has_more: boolean;
     page: number;
     items: BusinessItem[];
@@ -123,7 +124,7 @@ export default function OrderBusinessModal({ order, initialKind = 'records', ini
     const priceNeedsEntry = item?.price_ready !== undefined ? !Number(item.price_ready)
         : order.items?.some(i => i.id === Number(itemID) && i.unit_price !== undefined && Number(i.unit_price) <= 0) || false;
     const flowMatches = itemFlow?.flow.item.id === Number(itemID);
-    const canConfirmHere = !!data?.can_complete && !!item && !priceNeedsEntry
+    const canConfirmHere = !!data?.can_complete && !!item
         && (itemFlow?.flow.tracking ? itemFlow.flow.available_completion > 0 : item.production_ready === undefined || !!Number(item.production_ready));
     const openCompletion = () => {
         if (!item) return;
@@ -250,11 +251,11 @@ export default function OrderBusinessModal({ order, initialKind = 'records', ini
  {kind === 'delivery' && item && <div id="delivery-quantity-guidance" role="status" className={`rounded-xl border p-3 text-sm space-y-2 ${delivery.limit === 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-blue-100 bg-blue-50/40 text-blue-700'}`}>
    <p>{delivery.message}</p>
    {delivery.needsCompletion && <>
-     {priceNeedsEntry && <p>尚未录入有效零件单价，请先补录订单单价，再确认合格完工；系统不会自动按零产值记账。</p>}
-     {!priceNeedsEntry && item.production_ready !== undefined && !Number(item.production_ready) && !itemFlow?.flow.tracking && <p>仍有生产工序未完成，请先完成或更正工序记录。</p>}
+     {priceNeedsEntry && <p>单价待补：可以先确认合格和交货，补价后再按原完工月份计入产值。</p>}
+     {item.production_ready !== undefined && !Number(item.production_ready) && !itemFlow?.flow.tracking && <p>仍有生产工序未完成，请先完成或更正工序记录。</p>}
      {!data.can_complete && <p>当前账号没有合格完工确认权限，请由有生产报工权限的人员确认。</p>}
      <div className="flex flex-wrap gap-2">
-       {priceNeedsEntry && onEditOrder && <button type="button" className="erp-btn text-blue-600" disabled={saving || loading} onClick={onEditOrder}>补录零件单价</button>}
+       {priceNeedsEntry && onEditOrder && !onNavigate && <button type="button" className="erp-btn text-blue-600" disabled={saving || loading} onClick={onEditOrder}>补录零件单价</button>}
        {data.can_complete && <button type="button" className="erp-btn erp-success" disabled={saving || loading || !flowMatches || !canConfirmHere} onClick={openCompletion}>先确认合格完工</button>}
      </div>
    </>}

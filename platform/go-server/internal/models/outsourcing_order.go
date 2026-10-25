@@ -3,17 +3,18 @@ package models
 import "time"
 
 type OutsourcingSupplier struct {
-	ID           int64     `json:"id" gorm:"primaryKey"`
-	CorpID       int64     `json:"corp_id"`
-	Name         string    `json:"name"`
-	ContactName  string    `json:"contact_name"`
-	Phone        string    `json:"phone"`
-	Address      string    `json:"address"`
-	Capabilities string    `json:"capabilities"`
-	Notes        string    `json:"notes"`
-	Active       bool      `json:"active"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            int64     `json:"id" gorm:"primaryKey"`
+	CorpID        int64     `json:"corp_id"`
+	Name          string    `json:"name"`
+	ContactName   string    `json:"contact_name"`
+	Phone         string    `json:"phone"`
+	Address       string    `json:"address"`
+	Capabilities  string    `json:"capabilities"`
+	SupplierTypes string    `json:"supplier_types" gorm:"default:outsourcing"`
+	Notes         string    `json:"notes"`
+	Active        bool      `json:"active"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func (OutsourcingSupplier) TableName() string { return "outsourcing_suppliers" }

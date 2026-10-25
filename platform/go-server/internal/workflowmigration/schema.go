@@ -3,6 +3,7 @@ package workflowmigration
 type Column struct{ Table, Name, Definition string }
 
 var Columns = []Column{
+	{"outsourcing_suppliers", "supplier_types", "VARCHAR(100) NOT NULL DEFAULT 'outsourcing'"},
 	{"order_processes", "cutting_spec", "VARCHAR(500) NULL COMMENT '下料尺寸规格'"},
 	{"order_processes", "deleted_at", "DATETIME(3) NULL"},
 	{"production_completions", "delivery_batch_id", "BIGINT NULL"},
@@ -58,6 +59,7 @@ var Tables = []string{
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 	`CREATE TABLE IF NOT EXISTS outsourcing_suppliers (
  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,corp_id BIGINT NOT NULL,name VARCHAR(100) NOT NULL,
+ supplier_types VARCHAR(100) NOT NULL DEFAULT 'outsourcing',
  contact_name VARCHAR(100) NOT NULL DEFAULT '',phone VARCHAR(60) NOT NULL DEFAULT '',address VARCHAR(300) NOT NULL DEFAULT '',capabilities VARCHAR(300) NOT NULL DEFAULT '',notes VARCHAR(500) NOT NULL DEFAULT '',active TINYINT(1) NOT NULL DEFAULT 1,
  created_at DATETIME(3) NOT NULL,updated_at DATETIME(3) NOT NULL,
  UNIQUE KEY uq_supplier_name(corp_id,name),KEY ix_supplier_active(corp_id,active,id)

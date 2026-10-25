@@ -1,3 +1,4 @@
+import FinanceReadiness from "../features/accounting/FinanceReadiness";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchFinanceAccess,
@@ -40,18 +41,24 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
   const [showCost, setShowCost] = useState(false),
     [policyVersion, setPolicyVersion] = useState(0),
     [month, setMonth] = useState(defaultFinanceMonth(currentYear));
-  const [section, setSection] = useState<"details" | "history" | "allocation">(
-      "details",
-    ),
+  const [section, setSection] = useState<
+      "details" | "history" | "allocation" | null
+    >(null),
     [selectionVersion, setSelectionVersion] = useState(0);
   const [panelBusy, setPanelBusy] = useState(false);
   const [settingsOpened, setSettingsOpened] = useState(false);
   const detailRef = useRef<HTMLDivElement>(null),
     generation = useRef(0);
-  const years = useMemo(
-    () => Array.from({ length: 6 }, (_, i) => String(Number(currentYear) - i)),
-    [currentYear],
-  );
+  const pendingSection = useRef<{
+    section: "details" | "allocation";
+    month: string;
+  } | null>(null);
+  const years = useMemo(() => {
+    const values = Array.from({ length: 6 }, (_, i) =>
+      String(Number(currentYear) - i),
+    );
+    return values.includes(year) ? values : [year, ...values];
+  }, [currentYear, year]);
   const load = async () => {
     const version = ++generation.current;
     setLoading(true);
@@ -75,8 +82,10 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
     }
   };
   useEffect(() => {
-    setMonth(defaultFinanceMonth(year));
-    setSection("details");
+    const target = pendingSection.current;
+    pendingSection.current = null;
+    setMonth(target?.month || defaultFinanceMonth(year));
+    setSection(target?.section || null);
     void load();
     return () => {
       generation.current++;
@@ -84,10 +93,22 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
   }, [year]);
   const openSection = (next: typeof section, selectedMonth = month) => {
     if (panelBusy) return;
+    if (
+      selectedMonth &&
+      selectedMonth.slice(0, 4) !== year &&
+      (next === "details" || next === "allocation")
+    ) {
+      pendingSection.current = { section: next, month: selectedMonth };
+      setYear(selectedMonth.slice(0, 4));
+      setSelectionVersion((v) => v + 1);
+      return;
+    }
     setMonth(selectedMonth);
     setSection(next);
     setSelectionVersion((v) => v + 1);
-    detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    requestAnimationFrame(() =>
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
   const selectedMonthSummary = summary.months.find((m) => m.month === month);
   const exportCsv = () => {
@@ -213,6 +234,9 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
           </div>
         </header>
         <AccountingGuide mode={mode} />
+        {!loading && !error && (
+          <FinanceReadiness summary={summary} month={month} />
+        )}
         {mode === "output" && (
           <section className="erp-card p-4" aria-label="所选月份金额对比">
             <label className="erp-label max-w-56">
@@ -283,15 +307,22 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
               补录漏记完工
             </button>
           )}
-          <details className="text-sm" onToggle={e=>{if(e.currentTarget.open)setSettingsOpened(true);}}>
+          <details
+            className="text-sm"
+            onToggle={(e) => {
+              if (e.currentTarget.open) setSettingsOpened(true);
+            }}
+          >
             <summary className="erp-btn cursor-pointer">填写要求设置</summary>
             <div className="mt-2">
-              {settingsOpened && <BusinessEntrySettings
-                onSaved={() => {
-                  void load();
-                  setPolicyVersion((v) => v + 1);
-                }}
-              />}
+              {settingsOpened && (
+                <BusinessEntrySettings
+                  onSaved={() => {
+                    void load();
+                    setPolicyVersion((v) => v + 1);
+                  }}
+                />
+              )}
             </div>
           </details>
         </div>
@@ -316,30 +347,35 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
             </article>
           ))}
         </div>
-        {mode === "overview" && !loading && !error && (
-          <aside
-            className={`rounded-xl p-4 text-sm ${Number(summary.pending_cost_amount || 0) > 0 ? "bg-amber-50 text-amber-900 border border-amber-200" : "bg-slate-50 text-slate-600"}`}
-          >
-            还有 {financeAmount(summary.pending_cost_amount)}{" "}
-            元生产费用未计入零件（{summary.pending_cost_count || 0}{" "}
-            笔，包含其他年份），暂未从预计结余中扣除。
-            {access?.can_manage_costs && (
-              <button
-                type="button"
-                className="erp-btn ml-2"
-                onClick={() => openSection("allocation")}
-              >
-                去分配费用
-              </button>
-            )}
-            <p className="text-xs mt-1">
-              没有待分配费用，也不代表所有费用都已录入。
-            </p>
-          </aside>
-        )}
+        {mode === "overview" &&
+          !loading &&
+          !error &&
+          Number(summary.pending_cost_count || 0) > 0 && (
+            <aside
+              className={`rounded-xl p-4 text-sm ${Number(summary.pending_cost_amount || 0) > 0 ? "bg-amber-50 text-amber-900 border border-amber-200" : "bg-slate-50 text-slate-600"}`}
+            >
+              还有 {financeAmount(summary.pending_cost_amount)}{" "}
+              元生产费用未计入零件（{summary.pending_cost_count || 0}{" "}
+              笔，包含其他年份），暂未从预计结余中扣除。费用未核对时，结余仅供参考。
+              {access?.can_manage_costs && (
+                <button
+                  type="button"
+                  className="erp-btn ml-2"
+                  onClick={() => openSection("allocation")}
+                >
+                  去分配费用
+                </button>
+              )}
+              <p className="text-xs mt-1">
+                没有待分配费用，也不代表所有费用都已录入。
+              </p>
+            </aside>
+          )}
         <section className="erp-card overflow-hidden">
           <header className="px-4 py-3 border-b">
-            <h3 className="font-semibold">{mode === "output" ? "每月订单金额与完工产值" : "每月情况"}</h3>
+            <h3 className="font-semibold">
+              {mode === "output" ? "每月订单金额与完工产值" : "每月情况"}
+            </h3>
             <p className="text-xs text-slate-500 mt-1">
               {mode === "output"
                 ? "下单金额与完工产值按各自发生月份统计；下单日期和订单日期均未填写的零件，不计入月度下单金额。"
@@ -381,15 +417,22 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
           !loading &&
           !error &&
           summary.months.length > 0 && (
-            <OrderCostMonthTable months={summary.months} />
+            <details className="erp-card p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-600">
+                订单填写费用参考（展开查看，不重复扣减结余）
+              </summary>
+              <div className="mt-3">
+                <OrderCostMonthTable months={summary.months} />
+              </div>
+            </details>
           )}
         <div ref={detailRef} className="scroll-mt-4">
-          {!error && access && (
+          {!error && access && section && (
             <FinanceReviewPanel
               key={policyVersion}
               access={access}
               mode={mode}
-              initialTab={section}
+              initialTab={section || "details"}
               year={year}
               month={month}
               selectionVersion={selectionVersion}
@@ -401,9 +444,13 @@ export default function Finance({ mode = "overview" }: { mode?: FinanceMode }) {
         {showCost && access?.can_manage_costs && (
           <CostEntryModal
             onClose={() => setShowCost(false)}
-            onSuccess={(costType) => {
-              void load();
-              openSection(costType === "period" ? "details" : "allocation");
+            onSuccess={(costType, allocated, affectedMonth) => {
+              if (!affectedMonth || affectedMonth.slice(0, 4) === year)
+                void load();
+              openSection(
+                costType === "period" || allocated ? "details" : "allocation",
+                affectedMonth || month,
+              );
             }}
           />
         )}

@@ -1,0 +1,42 @@
+const assert=require('assert/strict'),{harness}=require('./test-support/workflowHarness.cjs');
+const h=harness(),editing=h.load('features/orders/orderEditing.ts'),scope=h.load('utils/scopedStorage.ts');
+h.storage.setItem('auth_user',JSON.stringify({id:1,corp_id:0}));
+assert.equal(scope.browserScope(),'0:1');
+const inherited={part_name:'A',start_date:'2026-01-01',quantity:100,production_quantity:110,unit_price:2,processes:[]};
+const independent={...inherited,part_name:'B',start_date:'2026-01-15'};
+const order={id:1,start_date:'2026-01-01',customer_id:7,items:[inherited,independent,{...inherited,start_date:''}]};
+const dated=editing.changeOrderDate(order,'2026-02-01');
+assert.equal(dated.items[0].start_date,'2026-02-01');assert.equal(dated.items[1].start_date,'2026-01-15');assert.equal(dated.items[2].start_date,'2026-02-01');assert.equal(order.items[0].start_date,'2026-01-01');
+const factual={...inherited,id:77,order_id:1,delivered_quantity:100,qualified_quantity:100,scrap_quantity:2,completion_date:'2026-02-01',drawing_ids:[8],drawing_data:'secret',material_cost:888,flow_tracking:true,delivery_plan:[{quantity:10}],processes:[{id:1,name:'下料',status:'completed',cutting_spec:'Φ20×30',is_outsourced:true,outsourcing_fee:55,actual_start_at:'2026-01-01',actual_end_at:'2026-01-02',planned_start_at:'2026-01-01'},{id:2,name:'旧工序',deleted_at:'2026-01-01'},{id:3,name:'送货'}]};
+const copied=editing.copyPart(factual,'2026-03-01');
+for(const field of ['id','order_id','delivered_quantity','qualified_quantity','scrap_quantity','completion_date','drawing_ids','drawing_data','material_cost','flow_tracking','delivery_plan'])assert.equal(copied[field],undefined,'must not clone '+field);
+assert.equal(copied.processes.length,2);assert.equal(copied.processes[0].cutting_spec,'Φ20×30');assert.equal(copied.processes[0].id,undefined);assert.equal(copied.processes[0].actual_end_at,undefined);assert.equal(copied.processes[0].outsourcing_fee,0);assert.equal(copied.status,'pending');assert.equal(copied.total_price,200);
+const clone=editing.copyOrder({...order,order_number:'OLD',items:[factual]});assert.equal(clone.id,undefined);assert.equal(clone.order_number,'');assert.equal(clone.due_date,'');assert.equal(clone.items[0].id,undefined);
+const draftHook=h.load('features/orders/useOrderDraft.ts').useOrderDraft;
+let active=true,saving=false,current={...order,items:[inherited]};
+const r=h.runner(()=>draftHook(active,current,saving));let api=r.render();
+api.markChanged();current={...current,notes:'账号一草稿'};r.render();h.tick();
+const oldKey=scope.scopedKey('order-draft:1');assert.equal(JSON.parse(h.store.get(oldKey)).order.notes,'账号一草稿');
+// Switching documents cannot write the newly opened order over the previous draft.
+current={id:2,notes:'另一订单'};r.render();h.tick();assert.equal(JSON.parse(h.store.get(oldKey)).order.id,1);assert.equal(h.store.get(scope.scopedKey('order-draft:2')),undefined);
+api=r.render();api.markChanged();current={...current,notes:'账号一第二订单'};r.render();active=false;r.render();assert.equal(JSON.parse(h.store.get(scope.scopedKey('order-draft:2'))).order.notes,'账号一第二订单');
+active=true;api=r.render();api=r.render();assert.equal(api.available.order.notes,'账号一第二订单');
+// Failed save keeps the draft. Successful save closes before saving=false and must remove the right key.
+saving=true;r.render();saving=false;r.render();h.tick();assert.ok(h.store.has(scope.scopedKey('order-draft:2')));
+saving=true;r.render();active=false;r.render();saving=false;r.render();h.tick();assert.equal(h.store.get(scope.scopedKey('order-draft:2')),undefined);
+current={id:1};active=true;r.render();api=r.render();assert.equal(api.available.order.notes,'账号一草稿');api.forget();assert.equal(h.store.get(oldKey),undefined);
+api.markChanged();current={id:1,notes:'隔离验证'};r.render();h.tick();active=false;r.render();r.close();
+h.storage.setItem('auth_user',JSON.stringify({id:2,corp_id:0}));const r2=h.runner(()=>draftHook(true,{id:1},false));r2.render();assert.equal(r2.render().available,null);r2.close();
+h.storage.setItem('auth_user',JSON.stringify({id:1,corp_id:1}));const r3=h.runner(()=>draftHook(true,{id:1},false));r3.render();assert.equal(r3.render().available,null);r3.close();
+const boundary=h.load('hooks/useAccountFormBoundary.ts').useAccountFormBoundary;let owner='0:1',resets=0;const boundaryRun=h.runner(()=>boundary(owner,()=>resets++));assert.equal(boundaryRun.render(),true);owner='1:2';assert.equal(boundaryRun.render(),false,'hide old form before resetting');assert.equal(resets,1);assert.equal(boundaryRun.render(),true);owner=null;assert.equal(boundaryRun.render(),false);assert.equal(resets,2);boundaryRun.close();
+const savedFilters=h.load('hooks/useSavedOrderFilters.ts').useSavedOrderFilters;h.storage.setItem('auth_user',JSON.stringify({id:11,corp_id:0}));const filterRun=h.runner(()=>savedFilters('orders',()=>({orderNumber:'',status:''})));let filter=filterRun.render();filter[1]({orderNumber:'A-100',status:'processing'});filterRun.render();const aKey=scope.scopedKey('filters:orders');assert.equal(JSON.parse(h.store.get(aKey)).orderNumber,'A-100');h.storage.setItem('auth_user',JSON.stringify({id:12,corp_id:0}));filter=filterRun.render();assert.equal(filter[0].orderNumber,'');filter=filterRun.render();filter[1]({orderNumber:'B-200',status:''});filterRun.render();assert.equal(JSON.parse(h.store.get(aKey)).orderNumber,'A-100');h.storage.setItem('auth_user',JSON.stringify({id:11,corp_id:0}));filter=filterRun.render();assert.equal(filter[0].orderNumber,'A-100');filterRun.close();
+// Delayed scroll saves and effect cleanup must retain the account that owns them.
+const scrollHook=h.load('hooks/useRememberedScroll.ts').useRememberedScroll;
+let ready=false;const scrollEvents=new Map(),element={scrollTop:0,addEventListener:(n,f)=>scrollEvents.set(n,f),removeEventListener:(n,f)=>{if(scrollEvents.get(n)===f)scrollEvents.delete(n)}};
+h.storage.setItem('auth_user',JSON.stringify({id:21,corp_id:0}));const scrollA=scope.scopedKey('list-scroll');h.storage.setItem(scrollA,'100');
+h.storage.setItem('auth_user',JSON.stringify({id:22,corp_id:0}));const scrollB=scope.scopedKey('list-scroll');h.storage.setItem(scrollB,'200');
+h.storage.setItem('auth_user',JSON.stringify({id:21,corp_id:0}));const scrollRun=h.runner(()=>scrollHook('list-scroll',ready));scrollRun.render().current=element;ready=true;scrollRun.render();assert.equal(element.scrollTop,100);
+element.scrollTop=450;scrollEvents.get('scroll')();h.storage.setItem('auth_user',JSON.stringify({id:22,corp_id:0}));h.tick();assert.equal(h.store.get(scrollA),'450');assert.equal(h.store.get(scrollB),'200','old timer must not write into new account');scrollRun.render();assert.equal(element.scrollTop,200);
+element.scrollTop=600;scrollEvents.get('scroll')();h.storage.setItem('auth_user',JSON.stringify({id:21,corp_id:0}));scrollRun.render();assert.equal(h.store.get(scrollB),'600');assert.equal(element.scrollTop,450);h.tick();assert.equal(h.store.get(scrollA),'450');scrollRun.close();assert.equal(scrollEvents.size,0);
+const PlanPreview=h.load('features/production-records/PlanChangePreview.tsx').default;const text=v=>typeof v==='string'||typeof v==='number'?String(v):Array.isArray(v)?v.map(text).join(''):v?.props?text(v.props.children):'';assert.equal(PlanPreview({before:{planned_start_at:'2026-10-20',planned_end_at:'2026-10-23'},draft:{planned_start_at:'2026-10-20',planned_end_at:'2026-10-23'},dueDate:'2026-10-28'}),null);assert.ok(text(PlanPreview({before:{planned_end_at:'2026-10-23'},draft:{planned_start_at:'',planned_end_at:'2026-10-30'},dueDate:'2026-10-28'})).includes('新结束日期晚于客户交期 2 天'));
+console.log('PASS: inherited vs independent order dates, pure template cloning without business facts, spare-price cap, scoped drafts, document-switch isolation, failed-save preservation, successful-save cleanup, account/company/form/filter/scroll isolation and plan-impact preview. No database writes.');

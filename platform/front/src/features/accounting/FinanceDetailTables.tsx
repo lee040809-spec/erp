@@ -61,13 +61,23 @@ export default function FinanceDetailTables({
                     {financeQuantity(b.qualified_quantity)}
                   </td>
                   <td className="p-3">
-                    {financeQuantity(b.billable_quantity)}
+                    {b.pricing_status === "pending"
+                      ? `待补价（${financeQuantity(b.billable_quantity)}）`
+                      : financeQuantity(b.billable_quantity)}
                   </td>
                   <td className="p-3 text-violet-600">
                     {financeQuantity(b.reserve_quantity)}
                   </td>
-                  <td className="p-3">{b.unit_price_snapshot}</td>
-                  <td className="p-3">{amount(b.output_value)}</td>
+                  <td className="p-3">
+                    {b.pricing_status === "pending"
+                      ? "待补价"
+                      : b.unit_price_snapshot}
+                  </td>
+                  <td className="p-3">
+                    {b.pricing_status === "pending"
+                      ? "待补价 · 暂不计产值"
+                      : amount(b.output_value)}
+                  </td>
                   <td className="p-3">{b.notes}</td>
                 </tr>
               ))}

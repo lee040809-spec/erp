@@ -17,6 +17,13 @@ func (h *OutsourcingHandler) Suppliers(c *gin.Context) {
 	corp := middleware.GetCorpID(c)
 	page, size, offset := boundedPage(c, 30)
 	q := h.db.Where("corp_id=?", corp)
+	if kind := c.Query("supplier_type"); kind != "" {
+		if !outsourcing.ValidSupplierType(kind) {
+			flowResult(c, errors.New("供应商类型无效"), nil)
+			return
+		}
+		q = q.Where("FIND_IN_SET(?,supplier_types)>0", kind)
+	}
 	if c.Query("active") == "1" {
 		q = q.Where("active=1")
 	}

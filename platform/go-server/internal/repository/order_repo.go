@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"machining-erp/internal/accounting"
 	"machining-erp/internal/drawings"
 	"machining-erp/internal/productionflow"
 	"time"
@@ -526,6 +527,17 @@ func (r *OrderRepository) Update(order *models.Order, items []models.OrderItem, 
 			}
 		}
 
+		var priceActor int64
+		if len(options) > 0 {
+			priceActor = options[0].ActorID
+		}
+		priceItems := make([]int64, 0, len(items))
+		for _, item := range items {
+			priceItems = append(priceItems, item.ID)
+		}
+		if err := accounting.ResolvePendingItems(tx, order.CorpID, priceItems, priceActor); err != nil {
+			return err
+		}
 		if err := recalculateOrderAmounts(tx, order); err != nil {
 			return err
 		}

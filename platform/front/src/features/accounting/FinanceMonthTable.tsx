@@ -49,7 +49,15 @@ export default function FinanceMonthTable({
         <tbody>
           {months.map((item) => (
             <tr key={item.month} className="border-t hover:bg-slate-50">
-              <td className="p-3 font-semibold">{item.month}</td>
+              <td className="p-3 font-semibold">
+                {item.month}
+                {!!item.pending_pricing_count && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    待补价 {item.pending_pricing_count} 批 /{" "}
+                    {item.pending_pricing_quantity} 件
+                  </p>
+                )}
+              </td>
               {mode === "output" ? (
                 <>
                   <td className="p-3 font-semibold">
@@ -83,7 +91,7 @@ export default function FinanceMonthTable({
                   <td className="p-3">
                     {item.closing_status === "closed"
                       ? "已核对并锁定"
-                      : "可继续补充"}
+                      : "费用未核对 · 暂估"}
                   </td>
                 </>
               )}

@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"machining-erp/internal/runtimeinfo"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,12 +26,13 @@ type object struct {
 }
 
 func main() {
-	var host, port, user, database, output string
+	var host, port, user, database, output, statusFile string
 	flag.StringVar(&host, "host", "127.0.0.1", "MySQL host")
 	flag.StringVar(&port, "port", "3306", "MySQL port")
 	flag.StringVar(&user, "user", "root", "MySQL user")
 	flag.StringVar(&database, "database", "erp", "database name")
 	flag.StringVar(&output, "output", "", "output .sql path")
+	flag.StringVar(&statusFile, "status-file", os.Getenv("ERP_BACKUP_STATUS_FILE"), "optional completed-backup status manifest")
 	flag.Parse()
 
 	if output == "" {
@@ -110,6 +112,11 @@ func main() {
 		fatal(err)
 	}
 	fmt.Printf("备份完成: %s\n文件大小: %d 字节\n", output, info.Size())
+	if statusFile != "" {
+		if err := runtimeinfo.RecordBackup(statusFile, output, host, database); err != nil {
+			fmt.Fprintf(os.Stderr, "数据库已备份，但备份状态记录未更新：%v\n", err)
+		}
+	}
 }
 
 func dump(ctx context.Context, db *sql.DB, w *bufio.Writer, database, host string) error {

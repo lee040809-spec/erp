@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import type { OutsourcingSupplier } from "../types/outsourcingOrder";
 import { flowRequest } from "../services/productionFlow";
+import {
+  SUPPLIER_TYPES,
+  supplierTypes,
+} from "../features/suppliers/supplierTypes";
 
 const empty = {
   name: "",
@@ -10,6 +14,7 @@ const empty = {
   capabilities: "",
   notes: "",
   active: true,
+  supplier_types: "outsourcing",
 };
 export default function SupplierEditor({
   supplier,
@@ -24,7 +29,14 @@ export default function SupplierEditor({
   onCancel: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const [form, setForm] = useState(supplier ? { ...supplier } : empty);
+  const [form, setForm] = useState(
+    supplier
+      ? {
+          ...supplier,
+          supplier_types: supplier.supplier_types ?? "outsourcing",
+        }
+      : empty,
+  );
   const [saving, setSaving] = useState(false),
     [error, setError] = useState("");
   const busy = useRef(false);
@@ -36,6 +48,10 @@ export default function SupplierEditor({
         if (busy.current) return;
         if (!form.name.trim()) {
           setError("请填写供应商名称");
+          return;
+        }
+        if (!supplierTypes(form.supplier_types).length) {
+          setError("请至少选择一种供应商类型");
           return;
         }
         busy.current = true;
@@ -62,13 +78,40 @@ export default function SupplierEditor({
         {supplier ? "编辑供应商" : "新增供应商"}
       </h3>
       <fieldset disabled={saving} className="space-y-3">
+        <fieldset className="space-y-2">
+          <legend className="erp-label">供应商类型 *（可多选）</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {SUPPLIER_TYPES.map((type) => (
+              <label
+                key={type.value}
+                className="flex items-center gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={supplierTypes(form.supplier_types).includes(
+                    type.value,
+                  )}
+                  onChange={(event) => {
+                    onDirty();
+                    const selected = supplierTypes(form.supplier_types).filter(
+                      (value) => value !== type.value,
+                    );
+                    if (event.target.checked) selected.push(type.value);
+                    setForm({ ...form, supplier_types: selected.join(",") });
+                  }}
+                />
+                {type.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(
             [
               ["name", "供应商名称", 100],
               ["contact_name", "联系人", 100],
               ["phone", "联系电话", 60],
-              ["capabilities", "加工能力 / 可承接工序", 300],
+              ["capabilities", "供应内容 / 加工能力", 300],
               ["address", "地址", 300],
               ["notes", "备注", 500],
             ] as const

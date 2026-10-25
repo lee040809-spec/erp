@@ -13,7 +13,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'warning_orders', label: '告警订单', icon: AlertTriangle },
   { id: 'imminent_orders', label: '临期订单', icon: Clock },
   { id: 'customers', label: '客户管理', icon: Users },
-  { id: 'outsourcing_suppliers', label: '外协供应商', icon: Users },
+  { id: 'outsourcing_suppliers', label: '供应商管理', icon: Users },
   { id: 'reconciliation', label: '对账管理', icon: FileText },
   { id: 'inventory', label: '仓库余料', icon: Package },
   { id: 'finance', label: '财务对账', icon: CircleDollarSign },
@@ -22,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
 
 // Supplier maintenance belongs to the existing production/order capability, without altering roles.
 export function withOperationalMenus(items: NavItem[]): NavItem[] {
+ items = items.map(item => item.id === "outsourcing_suppliers" ? { ...item, label: "供应商管理" } : item);
  if (items.some(i => i.id === 'outsourcing_suppliers') || !items.some(i => ['orders','production_orders','production_dashboard','dashboard','production_delivery','monthly_output'].includes(i.id))) return items;
- return [...items, { id:'outsourcing_suppliers',label:'外协供应商',icon:Users }];
+ return [...items, { id:'outsourcing_suppliers',label:'供应商管理',icon:Users }];
 }

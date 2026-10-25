@@ -1,3 +1,5 @@
+import {useSavedOrderFilters} from './hooks/useSavedOrderFilters';
+import {useAccountFormBoundary} from './hooks/useAccountFormBoundary';
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import type { WorkbenchOrderTarget, WorkbenchState } from './services/workbenchNavigation';
 import { saveProcessStatus, ProcessSaveNotice } from './services/processStatus';
@@ -67,6 +69,7 @@ export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [authUser, setAuthUser] = useState<{
         id?: number;
+        corp_id?: number;
         username: string;
         name: string;
         role_name: string;
@@ -218,24 +221,24 @@ export default function App() {
     const [orderTotal, setOrderTotal] = useState(0);
     const [overduePage, setOverduePage] = useState(1);
     const [overduePageSize, setOverduePageSize] = useState(50);
-    const [overdueFilters, setOverdueFilters] = useState(createEmptyFilters);
+    const [overdueFilters, setOverdueFilters] = useSavedOrderFilters('overdue',createEmptyFilters);
     const [warningPage, setWarningPage] = useState(1);
     const [warningPageSize, setWarningPageSize] = useState(50);
-    const [warningFilters, setWarningFilters] = useState(createEmptyFilters);
+    const [warningFilters, setWarningFilters] = useSavedOrderFilters('warning',createEmptyFilters);
     const [imminentPage, setImminentPage] = useState(1);
     const [imminentPageSize, setImminentPageSize] = useState(50);
-    const [imminentFilters, setImminentFilters] = useState(createEmptyFilters);
+    const [imminentFilters, setImminentFilters] = useSavedOrderFilters('imminent',createEmptyFilters);
     // 送货管理筛选状态
     const [deliveryPage, setDeliveryPage] = useState(1);
     const [deliveryPageSize, setDeliveryPageSize] = useState(10);
-    const [deliveryFilters, setDeliveryFilters] = useState(createEmptyFilters);
+    const [deliveryFilters, setDeliveryFilters] = useSavedOrderFilters('delivery',createEmptyFilters);
     // 对账管理筛选状态
     const [reconciliationPage, setReconciliationPage] = useState(1);
     const [reconciliationPageSize, setReconciliationPageSize] = useState(10);
-    const [reconciliationFilters, setReconciliationFilters] = useState(createEmptyFilters);
+    const [reconciliationFilters, setReconciliationFilters] = useSavedOrderFilters('reconciliation',createEmptyFilters);
     // 订单管理筛选状态
-    const [orderFilters, setOrderFilters] = useState<OrderFilters>(createOrderFilters);
-    const [appliedOrderFilters, setAppliedOrderFilters] = useState<OrderFilters>(createOrderFilters);
+    const [orderFilters, setOrderFilters] = useSavedOrderFilters<OrderFilters>('order-input',createOrderFilters);
+    const [appliedOrderFilters, setAppliedOrderFilters] = useSavedOrderFilters<OrderFilters>('order-applied',createOrderFilters);
     const [dashboardPage, setDashboardPage] = useState(1);
     const [dashboardPageSize, setDashboardPageSize] = useState(10);
     const [dashboardTotal, setDashboardTotal] = useState(0);
@@ -281,6 +284,8 @@ export default function App() {
         status: 'pending',
         items: [{ part_name: '', quantity: 1, unit_price: 0, total_price: 0, status: 'pending', processes: [] }]
     });
+ const orderAccountReady=useAccountFormBoundary(authUser?String(authUser.corp_id)+':'+String(authUser.id):null,()=>{setShowOrderModal(false);setNewOrder({});setFormErrors({});setCustomerSearch('');setShowCustomerDropdown(false)});
+
     // AI State
     const [aiPrompt, setAiPrompt] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -873,7 +878,7 @@ export default function App() {
       {/* Order Modal */}
       <AnimatePresence>
         {showOrderModal && (<Suspense fallback={null}>
-            <OrderModal show={showOrderModal} onClose={() => setShowOrderModal(false)} newOrder={newOrder} setNewOrder={setNewOrder} customers={customers} customerSearch={customerSearch} setCustomerSearch={setCustomerSearch} showCustomerDropdown={showCustomerDropdown} setShowCustomerDropdown={setShowCustomerDropdown} customerDropdownRef={customerDropdownRef} formErrors={formErrors} setFormErrors={setFormErrors} onSubmit={handleCreateOrder} isSaving={isSaving} hideCostFields={activeTab.startsWith('production_')} hidePriceFields={!canEditOrderPrices(authUser)}/>
+            <OrderModal show={showOrderModal && orderAccountReady} onClose={() => setShowOrderModal(false)} newOrder={newOrder} setNewOrder={setNewOrder} customers={customers} customerSearch={customerSearch} setCustomerSearch={setCustomerSearch} showCustomerDropdown={showCustomerDropdown} setShowCustomerDropdown={setShowCustomerDropdown} customerDropdownRef={customerDropdownRef} formErrors={formErrors} setFormErrors={setFormErrors} onSubmit={handleCreateOrder} isSaving={isSaving} hideCostFields={activeTab.startsWith('production_')} hidePriceFields={!canEditOrderPrices(authUser)}/>
           </Suspense>)}
       </AnimatePresence>
 

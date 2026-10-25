@@ -27,13 +27,13 @@ function reset(item=baseItem){states=[];refs=[];states[0]='delivery';states[1]={
 function render(component=Modal,p=props){hook=0;ref=0;effects=[];return component(p)}
 function button(tree,label){const found=nodes(tree,n=>n.type==='button'&&text(n)===label)[0];assert.ok(found,'Missing button '+label);return found}
 async function run(){
-reset();let tree=render();assert.ok(text(tree).includes('尚未录入有效零件单价'));assert.equal(button(tree,'先确认合格完工').props.disabled,true);assert.equal(button(tree,'保存本次登记').props.disabled,true);
+reset();let tree=render();assert.ok(text(tree).includes('单价待补'));assert.equal(button(tree,'先确认合格完工').props.disabled,false);assert.equal(button(tree,'保存本次登记').props.disabled,true);
 button(tree,'补录零件单价').props.onClick();assert.equal(priceEdits,1);
 const quantity=nodes(tree,n=>n.type==='input'&&n.props.type==='number')[0];assert.equal(quantity.props.max,undefined);assert.equal(quantity.props['aria-describedby'],'delivery-quantity-guidance');
 await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});assert.equal(requests.length,0);assert.ok(states[10].includes('确认合格完工'));
 reset({...baseItem,price_ready:1});tree=render();assert.equal(button(tree,'先确认合格完工').props.disabled,false);button(tree,'先确认合格完工').props.onClick();
 tree=render();let modal=nodes(tree,n=>n.type===Completion)[0];assert.equal(modal.props.suggestedQuantity,1);assert.equal(modal.props.latestBusinessDate,'2026-10-09');
-serverData={...serverData,items:[{...baseItem,price_ready:1,qualified_quantity:1,available_delivery:1}]};await modal.props.onSuccess();
+serverData={...serverData,items:[{...baseItem,price_ready:0,qualified_quantity:1,available_delivery:1}]};await modal.props.onSuccess();
 assert.equal(states[0],'delivery');assert.equal(states[3],'1');assert.equal(changed,1);
 tree=render();assert.equal(button(tree,'保存本次登记').props.disabled,false);assert.equal(nodes(tree,n=>n.type==='input'&&n.props.type==='number')[0].props.max,1);
 await nodes(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});const posted=requests.find(r=>r.options?.method==='POST');assert.ok(posted);const body=JSON.parse(posted.options.body);assert.equal(body.quantity,1);assert.equal(body.business_date,'2026-10-09');assert.equal(body.kind,'delivery');assert.equal(states[0],'records');

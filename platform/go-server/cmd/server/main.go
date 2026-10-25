@@ -216,6 +216,7 @@ func main() {
 	api := r.Group("/api/platform")
 	api.Use(middleware.AuthMiddleware(authService))
 	api.GET("/system/runtime", handlers.RuntimeMetrics(db))
+	api.GET("/system/context", handlers.RuntimeContext(db, cfg.MySQLHost, cfg.MySQLDatabase))
 	api.GET("/order-items/:itemId/drawing", orderHandler.Drawing)
 	api.GET("/order-items/:itemId/drawings", drawingHandler.List)
 	api.POST("/drawings", drawingHandler.Upload)
@@ -304,6 +305,10 @@ func main() {
 		api.GET("/finance/details", productionFinanceHandler.FinanceDetails)
 		api.GET("/finance/pending-costs", productionFinanceHandler.PendingCosts)
 		api.POST("/finance/allocations", productionFinanceHandler.AllocateCost)
+		api.GET("/finance/delivery-reconciliations", productionFinanceHandler.DeliveryReconciliationList)
+		api.POST("/finance/delivery-reconciliations", productionFinanceHandler.CreateDeliveryReconciliation)
+		api.GET("/finance/delivery-reconciliations/:statementId", productionFinanceHandler.DeliveryReconciliationDetail)
+		api.POST("/finance/delivery-reconciliations/:statementId/reverse", productionFinanceHandler.ReverseDeliveryReconciliation)
 		api.GET("/finance/cost-entries", productionFinanceHandler.ListCostEntries)
 		api.POST("/finance/cost-entries", productionFinanceHandler.CreateCostEntry)
 		api.POST("/finance/months/:month/close", productionFinanceHandler.CloseMonth)
@@ -311,6 +316,7 @@ func main() {
 		// 最终合格完工报工：产值以确认批次的数量和订单单价快照计算
 		api.GET("/order-items/:itemId/completions", productionFinanceHandler.ListCompletions)
 		api.POST("/order-items/:itemId/completions", productionFinanceHandler.CreateCompletion)
+		api.POST("/order-items/:itemId/price", productionFinanceHandler.PriceCompletion)
 		api.GET("/production/items/:itemId/records", productionRecordHandler.List)
 		api.POST("/production/items/:itemId/records/:kind/:recordId/correct", productionRecordHandler.Correct)
 

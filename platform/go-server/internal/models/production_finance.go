@@ -3,6 +3,7 @@ package models
 import "time"
 
 type ProductionCompletion struct {
+	PricingStatus      string     `gorm:"default:priced" json:"pricing_status"`
 	DeliveryBatchID    *int64     `json:"delivery_batch_id"`
 	ID                 int64      `gorm:"primaryKey;autoIncrement" json:"id"`
 	CorpID             int64      `gorm:"column:corp_id" json:"corp_id"`
@@ -55,22 +56,24 @@ type CostEntry struct {
 func (CostEntry) TableName() string { return "cost_entries" }
 
 type MonthlyFinanceSummary struct {
-	OrderAmount         string          `json:"order_amount"`
-	OrderCosts          OrderCostTotals `json:"order_costs"`
-	Month               string          `json:"month"`
-	QualifiedQuantity   string          `json:"qualified_quantity"`
-	BillableQuantity    string          `json:"billable_quantity"`
-	ReserveQuantity     string          `json:"reserve_quantity"`
-	CompletionCount     int64           `json:"completion_count"`
-	OutputValue         string          `json:"output_value"`
-	MaterialCost        string          `json:"material_cost"`
-	OutsourcingCost     string          `json:"outsourcing_cost"`
-	OtherProductionCost string          `json:"other_production_cost"`
-	ProductionCost      string          `json:"production_cost"`
-	ProductionProfit    string          `json:"production_profit"`
-	PeriodExpense       string          `json:"period_expense"`
-	OperatingProfit     string          `json:"operating_profit"`
-	ClosingStatus       string          `json:"closing_status"`
+	PendingPricingCount    int64           `json:"pending_pricing_count"`
+	PendingPricingQuantity string          `json:"pending_pricing_quantity"`
+	OrderAmount            string          `json:"order_amount"`
+	OrderCosts             OrderCostTotals `json:"order_costs"`
+	Month                  string          `json:"month"`
+	QualifiedQuantity      string          `json:"qualified_quantity"`
+	BillableQuantity       string          `json:"billable_quantity"`
+	ReserveQuantity        string          `json:"reserve_quantity"`
+	CompletionCount        int64           `json:"completion_count"`
+	OutputValue            string          `json:"output_value"`
+	MaterialCost           string          `json:"material_cost"`
+	OutsourcingCost        string          `json:"outsourcing_cost"`
+	OtherProductionCost    string          `json:"other_production_cost"`
+	ProductionCost         string          `json:"production_cost"`
+	ProductionProfit       string          `json:"production_profit"`
+	PeriodExpense          string          `json:"period_expense"`
+	OperatingProfit        string          `json:"operating_profit"`
+	ClosingStatus          string          `json:"closing_status"`
 }
 
 type AnnualFinanceSummary struct {
