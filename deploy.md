@@ -18,73 +18,36 @@ sudo install -d -m 700 -o erp -g erp /var/lib/machining-erp/drawings
 
 如实际运行用户不同，请替换 `erp`。本地 Windows 配置文件为 `platform/go-server/.env`，当前路径为 `F:/code/machining-erp-main/platform/go-server/data/drawings`，兼容已有文件；可改成其他专用数据目录，路径有空格时用双引号包裹，建议使用正斜杠。
 
-配置读取规则：环境变量优先；其次读取当前工作目录的 `.env.<GO_ENV>`（未设置 GO_ENV 时为 `.env.local`）；该文件不存在时读取 `.env`。两份配置文件不会合并，请在实际选用的文件中设置目录。未配置时兼容原目录 `data/drawings`；相对路径以 Go 服务的工作目录为基准，正式服务器推荐绝对路径。修改配置后需重启后端，日志会打印最终绝对目录；路径不可用或不可写时明确报错，不会自动换到其他目录。
+配置读取规则：环境变量优先；开发读取 `.env`，生产只读取 `.env.production`。Linux 生产包已嵌入默认配置，外部 `.env.production` 可覆盖其中的键；生产不会回退读取开发 `.env`。未配置时兼容原目录 `data/drawings`；相对路径以 Go 服务的工作目录为基准，正式服务器推荐绝对路径。修改配置后需重启后端，日志会打印最终绝对目录；路径不可用或不可写时明确报错，不会自动换到其他目录。
 
 **已有图纸换目录：** 先停止上传并停止后端，备份数据库及原图纸目录，将原目录完整复制到新目录，保留两位前缀子目录及文件标识，核对文件数量、大小和哈希、设置运行用户权限，再修改配置、启动服务并抽查旧图预览及新上传。旧目录在验证完成前保留。仅修改配置不会自动搬迁文件，也不需要修改数据库表结构或 storage_key。恢复旧目录配置即可回退（若切换后已有新上传，需先将新增文件同步回旧目录）。
 
 本地与云端是不同文件系统，即使连接同一数据库也不会自动共享图纸。需在维护窗口统一复制文件并保持备份，或让各后端使用同一可靠共享存储；不要让两个不同文件目录上的后端同时创建关联图纸记录。本次修改不自动同步或移动云端文件。
 
-备份时应同时备份数据库与该目录。历史内嵌图纸迁移工具支持环境变量 `DRAWING_STORAGE_DIR`，也可显式传 `-storage /var/lib/machining-erp/drawings`；命令行工具不自动加载 `.env`，执行时需自行导出环境变量或指定参数。
+备份时应同时备份数据库与该目录。历史内嵌图纸迁移工具支持环境变量 `DRAWING_STORAGE_DIR`，也可显式传 `-storage /var/lib/machining-erp/drawings`；服务、备份和迁移命令均通过同一个配置模块读取开发或生产配置；维护工具仍需明确参数授权，不会随服务启动自动执行迁移。
 
-## 构建 (本地)
+## Linux x86-64 发布包
 
-```bash
-# 前端
-Push-Location platform/front; npm run build; Pop-Location
+按 README 的步骤验证并构建前端，在 platform/go-server 中执行 go run ./cmd/package-linux -arch amd64。生产参数来自该目录的 .env.production，构建时嵌入后端二进制。打包工具只生成 Linux 包；可在 Windows 开发机上交叉编译。Go 编译工具链及前端依赖须预先安装。
 
-# 后端 (Windows 交叉编译 Linux)
-Push-Location platform/go-server; $env:CGO_ENABLED="0"; $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o bin/server_linux ./cmd/server/main.go; Pop-Location
+本轮生成的是连接 platform_test 的测试部署包，不能当作已确认的正式生产数据源。SMTP_HOST 留空，暂不发送邮件。
 
+将 releases 中的私有 tar.gz 通过安全渠道复制到云服务器，解压到 /opt/erp。不要把包或二进制提交 Git。创建非登录运行账号 erp，为其提供程序执行权限和图纸目录读写权限。前端文件需允许 Nginx 用户读取，后端程序仅由运行账号读取执行。
 
-$env:CGO_ENABLED=0; $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o bin/server_linux ./cmd/server
+审核包内 erp.service、nginx-erp.conf 后，分别安装到系统服务和 Nginx 站点目录；不要覆盖整份 nginx.conf。示例已匹配 /platform/ 路径，并允许 25MB 请求以容纳最大 20MB 图纸。根据现有站点配置端口、域名和证书。
 
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now erp
+sudo nginx -t
+sudo systemctl reload nginx
+sudo journalctl -u erp -n 50
 ```
 
----
+检查页面、/api/platform/health、登录及新旧图纸预览。程序已嵌入生产配置，无需另传 .env.production；有外部覆盖需要时，将该文件放在服务工作目录 /opt/erp，限制权限后重启服务。外部配置优先级高于嵌入默认值，系统环境变量优先级最高。
 
-## 上传 (本地)
+切换程序前备份数据库和图纸并核对结构升级，部署包不自动建表、迁移业务数据或复制图纸。旧 Windows 本地启动方式只是开发兼容入口，不再作为发布包提供。
 
-```bash
-scp platform/go-server/bin/server_linux root@8.145.45.155:/opt/erp/server
-scp platform/go-server/.env.production root@8.145.45.155:/opt/erp/.env
-scp -r platform/front/dist/* root@8.145.45.155:/var/www/erp/
-```
-
----
-
-## 重启服务 (服务器)
-
-```bash
-# 登录服务器
-ssh root@8.145.45.155
-
-# 删除旧进程
-pkill -f './server'
-
-# 赋予权限
-chmod +x /opt/erp/server
-
-# 启动服务
-cd /opt/erp && GO_ENV=production nohup ./server > server.log 2>&1 &
-```
-
----
-
-## 查看状态 (服务器)
-
-```bash
-ps aux | grep server
-tail -50 /opt/erp/server.log
-```
-
-## 重启 Nginx：
-
-```bash
-sudo nginx -t && sudo nginx -s reload
-```
-
-
-## nginx位置 /etc/nginx
 ### 合格与交货登记修改（2026-10-17）
 
 升级此功能前先备份数据库，然后执行 `sql/019_production_record_changes.sql`（Go 服务目录内也提供同名 SQL）。只新增 `production_record_changes` 修改历史表，原表及原数据保持不变；也可用现有 production-flow-migrate 增量迁移工具，执行后会核对原列与原数据哈希。

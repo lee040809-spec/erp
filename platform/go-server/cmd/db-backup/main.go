@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"machining-erp/internal/config"
 	"machining-erp/internal/runtimeinfo"
 	"os"
 	"path/filepath"
@@ -26,11 +27,15 @@ type object struct {
 }
 
 func main() {
+	if _, err := config.Initialize(); err != nil {
+		fatal(err)
+	}
+	settings := config.Load()
 	var host, port, user, database, output, statusFile string
-	flag.StringVar(&host, "host", "127.0.0.1", "MySQL host")
-	flag.StringVar(&port, "port", "3306", "MySQL port")
-	flag.StringVar(&user, "user", "root", "MySQL user")
-	flag.StringVar(&database, "database", "erp", "database name")
+	flag.StringVar(&host, "host", settings.MySQLHost, "MySQL host")
+	flag.StringVar(&port, "port", strconv.Itoa(settings.MySQLPort), "MySQL port")
+	flag.StringVar(&user, "user", settings.MySQLUser, "MySQL user")
+	flag.StringVar(&database, "database", settings.MySQLDatabase, "database name")
 	flag.StringVar(&output, "output", "", "output .sql path")
 	flag.StringVar(&statusFile, "status-file", os.Getenv("ERP_BACKUP_STATUS_FILE"), "optional completed-backup status manifest")
 	flag.Parse()

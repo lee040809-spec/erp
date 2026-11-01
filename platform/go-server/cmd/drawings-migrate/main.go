@@ -67,6 +67,9 @@ func snapshot(db *sql.DB, out *os.File) (string, int, error) {
 	return hex.EncodeToString(hash.Sum(nil)), count, rows.Err()
 }
 func run() error {
+	if _, err := config.Initialize(); err != nil {
+		return err
+	}
 	output := flag.String("output", "", "backup directory")
 	root := flag.String("storage", config.Load().DrawingStorageDir, "file directory (defaults to DRAWING_STORAGE_DIR)")
 	flag.Parse()
@@ -76,7 +79,7 @@ func run() error {
 	if os.Getenv("MYSQL_DATABASE") != "platform_test" && os.Getenv("ALLOW_DRAWING_MIGRATION") != "1" {
 		return errors.New("set ALLOW_DRAWING_MIGRATION=1 to migrate another database")
 	}
-	db, e := database.Connect(&database.Config{Host: os.Getenv("MYSQL_HOST"), User: os.Getenv("MYSQL_USER"), Password: os.Getenv("MYSQL_PASSWORD"), Database: os.Getenv("MYSQL_DATABASE"), Port: 3306})
+	db, e := database.Connect(&database.Config{Host: os.Getenv("MYSQL_HOST"), User: os.Getenv("MYSQL_USER"), Password: os.Getenv("MYSQL_PASSWORD"), Database: os.Getenv("MYSQL_DATABASE"), Port: config.Load().MySQLPort})
 	if e != nil {
 		return errors.New("database connection failed")
 	}

@@ -62,3 +62,8 @@ func getEnvInt(key string, defaultVal int) int {
 	}
 	return defaultVal
 }
+
+func validPort(value string) bool {
+	port, err := strconv.Atoi(value)
+	return err == nil && port > 0 && port <= 65535
+}

@@ -33,20 +33,27 @@ cd platform/go-server
 go run ./cmd/server
 ```
 
-访问 `http://127.0.0.1:3000/platform/`，前端接口代理连接本地后台 28080 端口。后台优先读取 `.env.<GO_ENV>`（默认 `.env.local`），不存在时读取 `.env`；系统环境变量优先。
+访问 `http://127.0.0.1:3000/platform/`，前端接口代理连接本地后台 28080 端口。开发后台统一读取 `.env`；生产环境统一读取 `.env.production`。Linux 发布包使用嵌入的生产配置作为默认值，外部同名生产文件及系统环境变量可覆盖；生产环境不会回退读取开发配置。
 
-### 当前 Windows 启动脚本
+### Linux x86-64 打包
 
-现有本机已完成初始化后，可双击 `start.bat` 启动、`stop.bat` 停止。服务由 Windows 独立任务管理，关闭 Codex 不影响运行。
+项目发布只生成 Linux amd64 包；不再提供 Windows 发布打包。旧 Windows 本地开发启动脚本保留兼容，但数据库参数从后端 .env 读取，不再从脚本硬编码或加密 XML 读取。
 
-脚本使用 `platform/go-server/bin/erp-server-memory.exe` 和本机加密保存的数据库密码；脚本中的数据库目标属于现有开发环境，换机器部署时需要配置。源码更新后，先停止后台，再编译替换程序：
+在 platform/go-server/.env.production 中填写数据库、DRAWING_STORAGE_DIR、SMTP_*、FROM_EMAIL 及独立 JWT_SECRET，设置 GO_ENV=production。邮件未配置时 SMTP_HOST 留空。配置文件不进入 Git。先验证并构建前端，再在 Go 后端目录执行：
 
-```powershell
-cd platform/go-server
-go build -o bin/erp-server-memory.exe ./cmd/server
+```sh
+cd platform/front
+npm ci
+npm run lint
+npm test
+npm run build
+cd ../go-server
+go run ./cmd/package-linux -arch amd64
 ```
 
-编译文件、`.env`、`.runtime`、数据库备份和图纸原文件不进入 Git。
+输出位于根目录 releases/erp-linux-amd64-时间.tar.gz，包含嵌入生产配置的后端、前端静态文件、systemd 和 Nginx 示例。包内不附带独立 .env 文件。私有配置临时资源及编译缓存构建后清理，发布包和实际配置均已加入 Git 排除规则。
+
+嵌入配置不是加密；拿到二进制的人可能提取数据库及邮箱密码，因此发布包只能私下交付，不能上传公开仓库。修改嵌入配置需重新打包；也可在运行目录放置 .env.production 覆盖后重启。旧图纸、数据库及数据迁移不由此包自动复制或执行。安装步骤见包内 INSTALL.txt 和 deploy.md。
 
 ## 数据库升级
 

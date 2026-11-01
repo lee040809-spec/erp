@@ -9,26 +9,12 @@ try {
     $erpScheduler.Connect()
     $erpTaskFolder = $erpScheduler.GetFolder('\')
     $erpExistingTask = Get-ErpScheduledTask $erpTaskFolder
-    if ($ResetDatabasePassword -and $erpExistingTask -and $erpExistingTask.State -eq 4) {
-        throw '请先运行 stop.bat 停止 ERP，再重新设置数据库密码。'
-    }
-    if ($ResetDatabasePassword -or -not (Test-Path -LiteralPath $erpCredentialPath)) {
-        Write-Host '首次启动需要数据库密码（不是 ERP 登录密码）。' -ForegroundColor Yellow
-        Write-Host '输入时不会显示字符或星号，这是正常现象；输入完成后请按回车。'
-        Write-Host '密码将使用 Windows 用户加密保存，后续启动不再询问。'
-        $erpSecurePassword = Read-Host '请输入数据库密码' -AsSecureString
-        try {
-            if ($erpSecurePassword.Length -eq 0) { throw '数据库密码不能为空。' }
-            $erpSecurePassword | Export-Clixml -LiteralPath $erpCredentialPath
-            $erpCredentialAcl = New-Object System.Security.AccessControl.FileSecurity
-            $erpCredentialAcl.SetAccessRuleProtection($true, $false)
-            foreach ($erpAllowedSid in @($erpUserSid, 'S-1-5-18')) {
-                $erpSidObject = New-Object System.Security.Principal.SecurityIdentifier($erpAllowedSid)
-                $erpRule = New-Object System.Security.AccessControl.FileSystemAccessRule($erpSidObject, 'FullControl', 'Allow')
-                $erpCredentialAcl.AddAccessRule($erpRule)
-            }
-            Set-Acl -LiteralPath $erpCredentialPath -AclObject $erpCredentialAcl
-        } finally { $erpSecurePassword.Dispose() }
+    $erpEnvFile = Join-Path $erpBackendRoot '.env'
+    if (-not (Test-Path -LiteralPath $erpEnvFile)) { throw '请先复制 platform/go-server/.env.example 为 .env 并填写数据库配置。' }
+    if ($ResetDatabasePassword) {
+        Start-Process -FilePath notepad.exe -ArgumentList ('"' + $erpEnvFile + '"')
+        Write-Host '请在 .env 修改 MYSQL_PASSWORD，保存后重新启动 ERP。'
+        exit 0
     }
     if ($erpExistingTask -and $erpExistingTask.State -eq 4) {
         Write-Host 'Windows 已在运行 ERP，正在确认服务状态……'

@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	driver "github.com/go-sql-driver/mysql"
+	"machining-erp/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,9 @@ import (
 
 // An additive migration; never rewrites existing process values.
 func run() error {
+	if _, err := config.Initialize(); err != nil {
+		return err
+	}
 	apply := flag.Bool("apply", false, "add cutting_spec after verified SQL backup")
 	output := flag.String("output", "", "backup SQL path")
 	flag.Parse()
@@ -24,7 +28,7 @@ func run() error {
 	cfg.User = os.Getenv("MYSQL_USER")
 	cfg.Passwd = os.Getenv("MYSQL_PASSWORD")
 	cfg.Net = "tcp"
-	cfg.Addr = os.Getenv("MYSQL_HOST") + ":3306"
+	cfg.Addr = fmt.Sprintf("%s:%d", config.Load().MySQLHost, config.Load().MySQLPort)
 	cfg.DBName = os.Getenv("MYSQL_DATABASE")
 	cfg.Timeout = 10 * time.Second
 	cfg.ReadTimeout = 60 * time.Second

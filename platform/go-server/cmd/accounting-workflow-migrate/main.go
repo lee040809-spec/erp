@@ -9,6 +9,7 @@ import (
 	"fmt"
 	driver "github.com/go-sql-driver/mysql"
 	"machining-erp/internal/accounting"
+	"machining-erp/internal/config"
 	"machining-erp/internal/workflowmigration"
 	"os"
 	"time"
@@ -21,6 +22,9 @@ func main() {
 	}
 }
 func run() error {
+	if _, err := config.Initialize(); err != nil {
+		return err
+	}
 	apply := flag.Bool("apply", false, "apply reviewed additive changes")
 	out := flag.String("output", "", "comparison report")
 	flag.Parse()
@@ -31,7 +35,7 @@ func run() error {
 	cfg.User = os.Getenv("MYSQL_USER")
 	cfg.Passwd = os.Getenv("MYSQL_PASSWORD")
 	cfg.Net = "tcp"
-	cfg.Addr = os.Getenv("MYSQL_HOST") + ":3306"
+	cfg.Addr = fmt.Sprintf("%s:%d", config.Load().MySQLHost, config.Load().MySQLPort)
 	cfg.DBName = os.Getenv("MYSQL_DATABASE")
 	cfg.Timeout = 10 * time.Second
 	cfg.ReadTimeout = time.Minute

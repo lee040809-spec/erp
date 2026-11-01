@@ -25,27 +25,15 @@ import (
 	"machining-erp/pkg/jwt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 )
 
 func main() {
-	// 根据 GO_ENV 加载不同的配置文件
-	env := os.Getenv("GO_ENV")
-	if env == "" {
-		env = "local"
+	source, err := config.Initialize()
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	envFile := ".env." + env
-	if _, err := os.Stat(envFile); err == nil {
-		if err := godotenv.Load(envFile); err != nil {
-			log.Printf("Warning: Error loading %s: %v", envFile, err)
-		} else {
-			log.Printf("Loaded config from %s", envFile)
-		}
-	} else {
-		godotenv.Load()
-	}
+	log.Printf("Configuration source: %s", source)
 
 	// 加载配置
 	cfg := config.Load()

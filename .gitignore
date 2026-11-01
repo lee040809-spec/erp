@@ -26,3 +26,8 @@ platform/go-server/tmp/
 
 # Private drawing originals (back up together with the database)
 platform/go-server/data/
+
+# Linux release packages contain private embedded production settings.
+/releases/
+platform/go-server/internal/config/production_embedded.env
+platform/go-server/.package-linux.lock

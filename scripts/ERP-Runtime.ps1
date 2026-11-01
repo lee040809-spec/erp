@@ -1,7 +1,6 @@
 ﻿# Shared definitions. Never print credentials.
 $erpRoot = Split-Path $PSScriptRoot -Parent
 $erpRuntimeRoot = Join-Path $erpRoot '.runtime'
-$erpCredentialPath = Join-Path $erpRuntimeRoot 'database-password.xml'
 $erpProcessManifestPath = Join-Path $erpRuntimeRoot 'services.json'
 $erpStopRequestPath = Join-Path $erpRuntimeRoot 'stop.request'
 $erpBackendRoot = Join-Path $erpRoot 'platform\go-server'

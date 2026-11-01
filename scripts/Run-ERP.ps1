@@ -16,23 +16,9 @@ try {
     $erpNodePath = if ($erpNodeCommand) { $erpNodeCommand.Source } else { Join-Path $env:ProgramFiles 'nodejs\node.exe' }
     if (-not (Test-Path -LiteralPath $erpNodePath)) { throw 'Node.js is missing.' }
     $erpRunStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $erpSecurePassword = Import-Clixml -LiteralPath $erpCredentialPath
-    if ($erpSecurePassword -isnot [Security.SecureString]) { throw 'Invalid encrypted database credential.' }
-    $erpPasswordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($erpSecurePassword)
-    try {
-        $env:PORT = '28080'
-        $env:MYSQL_HOST = '8.145.45.155'
-        $env:MYSQL_PORT = '3306'
-        $env:MYSQL_USER = 'appuser'
-        $env:MYSQL_DATABASE = 'platform_test'
-        $env:ERP_BACKUP_STATUS_FILE = Join-Path $erpRuntimeRoot 'backup-status.json'
-        $env:MYSQL_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($erpPasswordPointer)
-        $erpBackendProcess = Start-Process -FilePath $erpBackendExe -WorkingDirectory $erpBackendRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $erpRuntimeRoot "backend-$erpRunStamp.log") -RedirectStandardError (Join-Path $erpRuntimeRoot "backend-$erpRunStamp.err.log")
-    } finally {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($erpPasswordPointer)
-        $erpSecurePassword.Dispose()
-        Remove-Item Env:\MYSQL_PASSWORD -ErrorAction SilentlyContinue
-    }
+    $env:GO_ENV = 'local'
+    $env:ERP_BACKUP_STATUS_FILE = Join-Path $erpRuntimeRoot 'backup-status.json'
+    $erpBackendProcess = Start-Process -FilePath $erpBackendExe -WorkingDirectory $erpBackendRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $erpRuntimeRoot "backend-$erpRunStamp.log") -RedirectStandardError (Join-Path $erpRuntimeRoot "backend-$erpRunStamp.err.log")
     Set-Content -LiteralPath (Join-Path $erpRuntimeRoot 'backend.pid') -Value $erpBackendProcess.Id
     $erpFrontendProcess = Start-Process -FilePath $erpNodePath -ArgumentList ('"' + $erpViteScript + '" --host 127.0.0.1 --port 3000 --strictPort') -WorkingDirectory $erpFrontendRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $erpRuntimeRoot "frontend-$erpRunStamp.log") -RedirectStandardError (Join-Path $erpRuntimeRoot "frontend-$erpRunStamp.err.log")
     Set-Content -LiteralPath (Join-Path $erpRuntimeRoot 'frontend.pid') -Value $erpFrontendProcess.Id
