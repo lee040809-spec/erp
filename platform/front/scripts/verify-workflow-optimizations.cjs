@@ -13,21 +13,25 @@ for(const field of ['id','order_id','delivered_quantity','qualified_quantity','s
 assert.equal(copied.processes.length,2);assert.equal(copied.processes[0].cutting_spec,'Φ20×30');assert.equal(copied.processes[0].id,undefined);assert.equal(copied.processes[0].actual_end_at,undefined);assert.equal(copied.processes[0].outsourcing_fee,0);assert.equal(copied.status,'pending');assert.equal(copied.total_price,200);
 const clone=editing.copyOrder({...order,order_number:'OLD',items:[factual]});assert.equal(clone.id,undefined);assert.equal(clone.order_number,'');assert.equal(clone.due_date,'');assert.equal(clone.items[0].id,undefined);
 const draftHook=h.load('features/orders/useOrderDraft.ts').useOrderDraft;
-let active=true,saving=false,current={...order,items:[inherited]};
-const r=h.runner(()=>draftHook(active,current,saving));let api=r.render();
+let active=true,current={...order,items:[inherited]};
+const r=h.runner(()=>draftHook(active,current));let api=r.render();
 api.markChanged();current={...current,notes:'账号一草稿'};r.render();h.tick();
 const oldKey=scope.scopedKey('order-draft:1');assert.equal(JSON.parse(h.store.get(oldKey)).order.notes,'账号一草稿');
 // Switching documents cannot write the newly opened order over the previous draft.
 current={id:2,notes:'另一订单'};r.render();h.tick();assert.equal(JSON.parse(h.store.get(oldKey)).order.id,1);assert.equal(h.store.get(scope.scopedKey('order-draft:2')),undefined);
 api=r.render();api.markChanged();current={...current,notes:'账号一第二订单'};r.render();active=false;r.render();assert.equal(JSON.parse(h.store.get(scope.scopedKey('order-draft:2'))).order.notes,'账号一第二订单');
 active=true;api=r.render();api=r.render();assert.equal(api.available.order.notes,'账号一第二订单');
-// Failed save keeps the draft. Successful save closes before saving=false and must remove the right key.
-saving=true;r.render();saving=false;r.render();h.tick();assert.ok(h.store.has(scope.scopedKey('order-draft:2')));
-saving=true;r.render();active=false;r.render();saving=false;r.render();h.tick();assert.equal(h.store.get(scope.scopedKey('order-draft:2')),undefined);
+// Only the explicit success callback removes the submitted draft.
+r.render();h.tick();assert.ok(h.store.has(scope.scopedKey('order-draft:2')));
+const savedDraft=r.render().captureSubmission();r.render();savedDraft();active=false;r.render();h.tick();assert.equal(h.store.get(scope.scopedKey('order-draft:2')),undefined);
 current={id:1};active=true;r.render();api=r.render();assert.equal(api.available.order.notes,'账号一草稿');api.forget();assert.equal(h.store.get(oldKey),undefined);
 api.markChanged();current={id:1,notes:'隔离验证'};r.render();h.tick();active=false;r.render();r.close();
-h.storage.setItem('auth_user',JSON.stringify({id:2,corp_id:0}));const r2=h.runner(()=>draftHook(true,{id:1},false));r2.render();assert.equal(r2.render().available,null);r2.close();
-h.storage.setItem('auth_user',JSON.stringify({id:1,corp_id:1}));const r3=h.runner(()=>draftHook(true,{id:1},false));r3.render();assert.equal(r3.render().available,null);r3.close();
+h.storage.setItem('auth_user',JSON.stringify({id:2,corp_id:0}));const r2=h.runner(()=>draftHook(true,{id:1}));r2.render();assert.equal(r2.render().available,null);r2.close();
+h.storage.setItem('auth_user',JSON.stringify({id:1,corp_id:1}));const r3=h.runner(()=>draftHook(true,{id:1}));r3.render();assert.equal(r3.render().available,null);r3.close();
+// The real parent removes OrderModal instead of rendering it with active=false.
+h.storage.setItem('auth_user',JSON.stringify({id:31,corp_id:0}));let currentDraft={id:88,notes:'before'};
+const mounted=h.runner(()=>draftHook(true,currentDraft));let mountedApi=mounted.render();currentDraft={...currentDraft,notes:'submitted'};mountedApi.markChanged(currentDraft);mounted.render();h.tick();const draft88=scope.scopedKey('order-draft:88');assert.ok(h.store.has(draft88));const markSaved=mounted.render().captureSubmission();mounted.render();markSaved();mounted.close();h.tick();assert.equal(h.store.get(draft88),undefined,'success cleanup must survive immediate conditional unmount');
+let failedDraft={id:89,notes:'before'};const failed=h.runner(()=>draftHook(true,failedDraft));let failedApi=failed.render();failedDraft={...failedDraft,notes:'keep after failed request'};failedApi.markChanged(failedDraft);failed.render();failed.close();assert.ok(h.store.has(scope.scopedKey('order-draft:89')),'failed request/unmount retains draft');
 const boundary=h.load('hooks/useAccountFormBoundary.ts').useAccountFormBoundary;let owner='0:1',resets=0;const boundaryRun=h.runner(()=>boundary(owner,()=>resets++));assert.equal(boundaryRun.render(),true);owner='1:2';assert.equal(boundaryRun.render(),false,'hide old form before resetting');assert.equal(resets,1);assert.equal(boundaryRun.render(),true);owner=null;assert.equal(boundaryRun.render(),false);assert.equal(resets,2);boundaryRun.close();
 const savedFilters=h.load('hooks/useSavedOrderFilters.ts').useSavedOrderFilters;h.storage.setItem('auth_user',JSON.stringify({id:11,corp_id:0}));const filterRun=h.runner(()=>savedFilters('orders',()=>({orderNumber:'',status:''})));let filter=filterRun.render();filter[1]({orderNumber:'A-100',status:'processing'});filterRun.render();const aKey=scope.scopedKey('filters:orders');assert.equal(JSON.parse(h.store.get(aKey)).orderNumber,'A-100');h.storage.setItem('auth_user',JSON.stringify({id:12,corp_id:0}));filter=filterRun.render();assert.equal(filter[0].orderNumber,'');filter=filterRun.render();filter[1]({orderNumber:'B-200',status:''});filterRun.render();assert.equal(JSON.parse(h.store.get(aKey)).orderNumber,'A-100');h.storage.setItem('auth_user',JSON.stringify({id:11,corp_id:0}));filter=filterRun.render();assert.equal(filter[0].orderNumber,'A-100');filterRun.close();
 // Delayed scroll saves and effect cleanup must retain the account that owns them.

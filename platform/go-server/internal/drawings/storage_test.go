@@ -6,9 +6,44 @@ import (
 	"image/png"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestConfiguredDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "private", "drawings")
+	resolved, err := PrepareDirectory(root)
+	if err != nil || !filepath.IsAbs(resolved) {
+		t.Fatalf("prepare: %q %v", resolved, err)
+	}
+	files, err := os.ReadDir(resolved)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("write probe left files: %v %v", files, err)
+	}
+	s := NewStorage(resolved)
+	pdf := "%PDF-1.7\n%%EOF"
+	saved, err := s.Save(strings.NewReader(pdf), "drawing.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := s.Path(saved.Key)
+	if err != nil || filepath.Dir(filepath.Dir(path)) != resolved {
+		t.Fatalf("file escaped configured root: %q %v", path, err)
+	}
+	// Reopening the same root must preserve preview/download access after restart.
+	path, err = NewStorage(resolved).Path(saved.Key)
+	data, readErr := os.ReadFile(path)
+	if err != nil || readErr != nil || string(data) != pdf {
+		t.Fatalf("reopen failed: %v %v", err, readErr)
+	}
+	if _, err = PrepareDirectory(path); err == nil {
+		t.Fatal("file incorrectly accepted as storage directory")
+	}
+	if _, err = PrepareDirectory("  "); err == nil {
+		t.Fatal("blank configuration accepted")
+	}
+}
 
 func TestStorageValidation(t *testing.T) {
 	s := NewStorage(t.TempDir())

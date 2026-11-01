@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	ServerPort          int
+	DrawingStorageDir   string
 	MySQLHost           string
 	MySQLUser           string
 	MySQLPassword       string
@@ -27,6 +28,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		ServerPort:          getEnvInt("PORT", 8080),
+		DrawingStorageDir:   getEnv("DRAWING_STORAGE_DIR", "data/drawings"),
 		MySQLHost:           getEnv("MYSQL_HOST", "localhost"),
 		MySQLUser:           getEnv("MYSQL_USER", "root"),
 		MySQLPassword:       getEnv("MYSQL_PASSWORD", ""),

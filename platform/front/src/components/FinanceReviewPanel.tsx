@@ -206,19 +206,28 @@ export default function FinanceReviewPanel({
       const signature = JSON.stringify([selected.order_item_id, form]);
       if (historyRequest.current.signature !== signature)
         historyRequest.current = { signature, id: crypto.randomUUID() };
-      await request("/api/platform/finance/history", {
-        request_id: historyRequest.current.id,
-        order_item_id: selected.order_item_id,
-        qualified_quantity: Number(form.quantity),
-        business_date: form.date,
-        expected_price: selected.unit_price,
-        source_ref: form.sourceRef.trim(),
-        confirmed_price: form.price.trim(),
-        notes: form.notes.trim(),
-        reviewed: true,
-      });
+      const result = await request<{ pricing_status: "pending" | "priced" }>(
+        "/api/platform/finance/history",
+        {
+          request_id: historyRequest.current.id,
+          order_item_id: selected.order_item_id,
+          qualified_quantity: Number(form.quantity),
+          business_date: form.date,
+          expected_price: selected.unit_price ?? "0",
+          source_ref: form.sourceRef.trim(),
+          confirmed_price: form.price.trim(),
+          notes: form.notes.trim(),
+          reviewed: true,
+        },
+      );
       setSelected(null);
-      setMessage("已计入正式产值，请在对应年份、月份查看明细。");
+      setMessage(
+        result?.pricing_status === "pending"
+          ? "合格数量已登记，金额待补价；补价后归原完工月份。"
+          : result?.pricing_status === "priced"
+            ? "已计入产值，请在原完工年份、月份查看明细。"
+            : "合格记录已保存，请刷新核对定价状态。",
+      );
       onImported();
       await load();
     } catch (e) {

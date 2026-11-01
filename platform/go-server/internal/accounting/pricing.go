@@ -6,14 +6,15 @@ import (
 	"gorm.io/gorm"
 )
 
-// ResolvePending must run within the caller's transaction, after locking the order/item.
+// ResolvePending runs after the caller locks the order/item; the month locks
+// must already have been acquired by WithPricingMonths before those business locks.
 // Priced historical snapshots are immutable. Original completion dates are preserved.
-func ResolvePending(tx *gorm.DB, corp, item, actor int64) error {
-	return ResolvePendingItems(tx, corp, []int64{item}, actor)
+func ResolvePending(tx *gorm.DB, corp, item, actor int64, locked PricingMonths) error {
+	return ResolvePendingItems(tx, corp, []int64{item}, actor, locked)
 }
 
 // One lookup per order, rather than an extra round trip for every part on each save.
-func ResolvePendingItems(tx *gorm.DB, corp int64, items []int64, actor int64) error {
+func ResolvePendingItems(tx *gorm.DB, corp int64, items []int64, actor int64, locked PricingMonths) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -27,14 +28,14 @@ func ResolvePendingItems(tx *gorm.DB, corp int64, items []int64, actor int64) er
 	if len(pending) == 0 {
 		return nil
 	}
-	months := map[string]bool{}
 	ids := make([]int64, 0, len(pending))
 	for _, row := range pending {
-		if !months[row.Month] {
-			if err := LockMonth(tx, corp, row.Month); err != nil {
-				return err
-			}
-			months[row.Month] = true
+		status, exists := locked[row.Month]
+		if !exists {
+			return ErrPricingMonthsChanged
+		}
+		if status != "open" {
+			return errors.New("相关月份已核对锁定，请先由管理员核对后处理，不能直接补价或记账")
 		}
 		ids = append(ids, row.ID)
 	}
@@ -42,15 +43,4 @@ func ResolvePendingItems(tx *gorm.DB, corp int64, items []int64, actor int64) er
 		return err
 	}
 	return tx.Exec("UPDATE production_completions p JOIN order_items i ON i.id=p.order_item_id AND i.corp_id=p.corp_id SET p.unit_price_snapshot=i.unit_price,p.output_value=ROUND(p.billable_quantity*i.unit_price,2),p.pricing_status='priced' WHERE p.corp_id=? AND p.id IN ? AND p.pricing_status='pending'", corp, ids).Error
-}
-
-func LockMonth(tx *gorm.DB, corp int64, month string) error {
-	status, err := LockMonthStatus(tx, corp, month)
-	if err != nil {
-		return err
-	}
-	if status != "open" {
-		return errors.New("相关月份已核对锁定，请先由管理员核对后处理，不能直接补价或记账")
-	}
-	return nil
 }

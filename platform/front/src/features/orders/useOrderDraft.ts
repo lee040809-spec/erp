@@ -9,18 +9,15 @@ interface Draft {
 export function useOrderDraft(
   active: boolean,
   order: Partial<Order>,
-  saving: boolean,
 ) {
   const key = scopedKey(`order-draft:${order.id || "new"}`);
   const [available, setAvailable] = useState<Draft | null>(null),
     [message, setMessage] = useState("");
   const dirty = useRef(false),
     changeKey = useRef<string | null>(null),
-    submitted = useRef<string | null>(null),
     session = useRef<{
       key: string;
       order: Partial<Order>;
-      saving: boolean;
       dirty: boolean;
     } | null>(null);
   const read = () => {
@@ -67,30 +64,15 @@ export function useOrderDraft(
   };
   useEffect(() => {
     const previous = session.current;
-    if (saving && active && key) submitted.current = key;
-    if (!saving && submitted.current) {
-      if (!active) {
-        try {
-          localStorage.removeItem(submitted.current);
-        } catch {}
-        if (previous) previous.dirty = false;
-      }
-      submitted.current = null;
-    }
     if (!active || previous?.key !== key) {
       if (previous) {
-        if (!active && previous.saving && !saving) {
-          try {
-            localStorage.removeItem(previous.key);
-          } catch {}
-        } else flush(previous);
+        flush(previous);
       }
       session.current =
         active && key
           ? {
               key,
               order,
-              saving,
               dirty: !!previous && dirty.current && changeKey.current === key,
             }
           : null;
@@ -100,13 +82,12 @@ export function useOrderDraft(
       setMessage("");
     } else if (previous) {
       previous.order = order;
-      previous.saving = saving;
       previous.dirty ||= dirty.current && changeKey.current === key;
     }
     const captured = session.current;
     const timer = setTimeout(() => flush(captured), 400);
     return () => clearTimeout(timer);
-  }, [active, key, order, saving]);
+  }, [active, key, order]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const leave = () => flush();
@@ -124,6 +105,24 @@ export function useOrderDraft(
       changeKey.current = scopedKey(`order-draft:${nextOrder.id || "new"}`);
     },
     forget,
+    // The parent invokes this callback only after the server accepts the order,
+    // before conditionally unmounting the modal. Failed requests retain the draft.
+    captureSubmission: () => {
+      const captured = session.current;
+      const submittedKey = key;
+      return () => {
+        if (captured) captured.dirty = false;
+        if (session.current === captured) {
+          dirty.current = false;
+          changeKey.current = null;
+        }
+        if (submittedKey) {
+          try {
+            localStorage.removeItem(submittedKey);
+          } catch {}
+        }
+      };
+    },
     restore: () => {
       const draft = read();
       setAvailable(null);

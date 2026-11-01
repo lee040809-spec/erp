@@ -32,6 +32,35 @@ func NewStorage(root string) *Storage {
 	}
 	return &Storage{Root: root}
 }
+
+// PrepareDirectory resolves the configured root once and verifies that uploads
+// can be written. Never silently fall back to a different directory on failure.
+func PrepareDirectory(root string) (string, error) {
+	if strings.TrimSpace(root) == "" {
+		return "", errors.New("图纸目录不能为空")
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("解析图纸目录失败: %w", err)
+	}
+	if err = os.MkdirAll(abs, 0700); err != nil {
+		return "", fmt.Errorf("创建图纸目录失败: %w", err)
+	}
+	probe, err := os.CreateTemp(abs, ".drawing-write-check-*")
+	if err != nil {
+		return "", fmt.Errorf("图纸目录不可写: %w", err)
+	}
+	name := probe.Name()
+	closeErr := probe.Close()
+	removeErr := os.Remove(name)
+	if closeErr != nil {
+		return "", closeErr
+	}
+	if removeErr != nil {
+		return "", removeErr
+	}
+	return abs, nil
+}
 func (s *Storage) Path(key string) (string, error) {
 	if !storageKey.MatchString(key) {
 		return "", errors.New("无效的图纸文件标识")

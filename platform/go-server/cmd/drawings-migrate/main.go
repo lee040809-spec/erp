@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"gorm.io/gorm"
+	"machining-erp/internal/config"
 	"machining-erp/internal/drawings"
 	"machining-erp/internal/models"
 	"machining-erp/pkg/database"
@@ -67,7 +68,7 @@ func snapshot(db *sql.DB, out *os.File) (string, int, error) {
 }
 func run() error {
 	output := flag.String("output", "", "backup directory")
-	root := flag.String("storage", "data/drawings", "file directory")
+	root := flag.String("storage", config.Load().DrawingStorageDir, "file directory (defaults to DRAWING_STORAGE_DIR)")
 	flag.Parse()
 	if *output == "" {
 		return errors.New("backup directory required")

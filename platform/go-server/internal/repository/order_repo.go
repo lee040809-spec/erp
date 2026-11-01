@@ -267,7 +267,14 @@ type OrderUpdateOptions struct {
 }
 
 func (r *OrderRepository) Update(order *models.Order, items []models.OrderItem, options ...OrderUpdateOptions) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	originalOrder := *order
+	originalItems := cloneUpdateItems(items)
+	var committedOrder models.Order
+	var committedItems []models.OrderItem
+	err := accounting.WithPricingMonths(r.db, order.CorpID, accounting.PricingScope{OrderID: order.ID}, func(tx *gorm.DB, locked accounting.PricingMonths) error {
+		candidate := originalOrder
+		order := &candidate
+		items := cloneUpdateItems(originalItems)
 		var existing models.Order
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=? AND corp_id=?", order.ID, order.CorpID).Take(&existing).Error; err != nil {
 			return err
@@ -535,7 +542,10 @@ func (r *OrderRepository) Update(order *models.Order, items []models.OrderItem, 
 		for _, item := range items {
 			priceItems = append(priceItems, item.ID)
 		}
-		if err := accounting.ResolvePendingItems(tx, order.CorpID, priceItems, priceActor); err != nil {
+		if err := accounting.ResolvePendingItems(tx, order.CorpID, priceItems, priceActor, locked); err != nil {
+			return err
+		}
+		if err := accounting.ValidateOrderAmounts(tx, order.CorpID, order.ID, nil); err != nil {
 			return err
 		}
 		if err := recalculateOrderAmounts(tx, order); err != nil {
@@ -556,8 +566,33 @@ func (r *OrderRepository) Update(order *models.Order, items []models.OrderItem, 
 			return err
 		}
 		order.Status = models.OrderStatus(utils.CalculateStatus(statuses))
-		return tx.Model(order).Omit("Items").Updates(map[string]interface{}{"status": order.Status, "total_amount": order.TotalAmount}).Error
+		if err := tx.Model(order).Omit("Items").Updates(map[string]interface{}{"status": order.Status, "total_amount": order.TotalAmount}).Error; err != nil {
+			return err
+		}
+		committedOrder = *order
+		committedItems = items
+		return nil
 	})
+	if err == nil {
+		*order = committedOrder
+		copy(items, committedItems)
+	}
+	return err
+}
+
+// Retrying a rolled-back transaction must not reuse assigned IDs or edited routes.
+func cloneUpdateItems(items []models.OrderItem) []models.OrderItem {
+	if items == nil {
+		return nil
+	}
+	out := make([]models.OrderItem, len(items))
+	copy(out, items)
+	for i := range out {
+		out[i].Processes = append([]models.OrderProcess(nil), items[i].Processes...)
+		out[i].DeliveryPlan = append([]models.DeliveryBatchInput(nil), items[i].DeliveryPlan...)
+		out[i].DrawingIDs = append([]int64(nil), items[i].DrawingIDs...)
+	}
+	return out
 }
 
 func recalculateOrderAmounts(tx *gorm.DB, order *models.Order) error {

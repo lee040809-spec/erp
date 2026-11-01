@@ -25,23 +25,35 @@ func (h *ProductionFinanceHandler) PriceCompletion(c *gin.Context) {
 		return
 	}
 	corp, actor := middleware.GetCorpID(c), middleware.GetUserID(c)
-	err := h.db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+	err := accounting.WithPricingMonths(h.db.WithContext(c.Request.Context()), corp, accounting.PricingScope{ItemIDs: []int64{itemID}}, func(tx *gorm.DB, locked accounting.PricingMonths) error {
 		item, err := productionflow.LockItem(tx, corp, itemID)
 		if err != nil {
 			return err
 		}
+		if item.Currency != "CNY" {
+			return errors.New("请先在订单资料中核对人民币结算币种")
+		}
 		// This action fills missing prices only; price renegotiations belong in order editing.
 		var old string
-		if err = tx.Raw("SELECT CAST(COALESCE(unit_price,0) AS CHAR) FROM order_items WHERE corp_id=? AND id=?", corp, itemID).Scan(&old).Error; err != nil {
+		if err = tx.Raw("SELECT CAST(COALESCE(unit_price,0) AS CHAR) FROM order_items WHERE corp_id=? AND id=? FOR UPDATE", corp, itemID).Scan(&old).Error; err != nil {
 			return err
 		}
 		if positiveDecimal(old) && !sameDecimal(old, req.Price) {
 			return errors.New("该零件已有单价，请刷新；价格变更请在订单资料中核对")
 		}
-		if err = tx.Exec("UPDATE order_items SET unit_price=?,currency='CNY',total_price=ROUND(quantity*CAST(? AS DECIMAL(15,4)),2) WHERE corp_id=? AND id=?", req.Price, req.Price, corp, itemID).Error; err != nil {
+		if err = accounting.ValidateOrderAmounts(tx, corp, item.OrderID, map[int64]string{itemID: req.Price}); err != nil {
 			return err
 		}
-		if err = accounting.ResolvePending(tx, corp, itemID, actor); err != nil {
+		if !positiveDecimal(old) {
+			result := tx.Exec("UPDATE order_items SET unit_price=?,currency='CNY',total_price=ROUND(quantity*CAST(? AS DECIMAL(15,4)),2) WHERE corp_id=? AND id=? AND (unit_price IS NULL OR unit_price=0)", req.Price, req.Price, corp, itemID)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return errors.New("单价已变化，请刷新后重试")
+			}
+		}
+		if err = accounting.ResolvePending(tx, corp, itemID, actor, locked); err != nil {
 			return err
 		}
 		return tx.Exec("UPDATE orders SET total_amount=(SELECT COALESCE(SUM(total_price),0) FROM order_items WHERE corp_id=? AND order_id=?) WHERE corp_id=? AND id=?", corp, item.OrderID, corp, item.OrderID).Error

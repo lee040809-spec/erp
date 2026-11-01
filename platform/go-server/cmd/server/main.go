@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"machining-erp/internal/config"
+	"machining-erp/internal/drawings"
 	"machining-erp/internal/handlers"
 	"machining-erp/internal/middleware"
 	"machining-erp/internal/models"
@@ -48,6 +49,11 @@ func main() {
 
 	// 加载配置
 	cfg := config.Load()
+	drawingRoot, err := drawings.PrepareDirectory(cfg.DrawingStorageDir)
+	if err != nil {
+		log.Fatalf("Invalid DRAWING_STORAGE_DIR: %v", err)
+	}
+	log.Printf("Drawing storage directory: %s", drawingRoot)
 	if os.Getenv("GOMEMLIMIT") == "" {
 		debug.SetMemoryLimit(256 << 20)
 	}
@@ -150,7 +156,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	customerHandler := handlers.NewCustomerHandler(customerRepo, db)
 	orderHandler := handlers.NewOrderHandler(orderRepo, orderItemRepo, processRepo, orderNumSvc, db)
-	drawingHandler := handlers.NewPartDrawingHandler(db, os.Getenv("DRAWING_STORAGE_DIR"))
+	drawingHandler := handlers.NewPartDrawingHandler(db, drawingRoot)
 	itemHandler := handlers.NewOrderItemHandler(orderItemRepo, orderRepo, processRepo, db)
 	processHandler := handlers.NewProcessHandler(processRepo, orderItemRepo, orderRepo, db)
 	materialHandler := handlers.NewMaterialHandler(materialRepo, db)

@@ -54,7 +54,7 @@ func (h *ProductionFinanceHandler) PreviewHistory(c *gin.Context) {
 	rows := make([]map[string]interface{}, 0)
 	err := query.Select(`i.id AS order_item_id, i.order_id, o.order_number, COALESCE(o.customer_name,'') AS customer_name,
  i.part_name, i.quantity, COALESCE(NULLIF(i.production_quantity,0),i.quantity) AS production_quantity, COALESCE(i.scrap_quantity,0) AS scrap_quantity,
- DATE_FORMAT(i.completion_date,'%Y-%m-%d') AS business_date, CAST(i.unit_price AS CHAR) AS unit_price,
+ DATE_FORMAT(i.completion_date,'%Y-%m-%d') AS business_date, CAST(COALESCE(i.unit_price,0) AS CHAR) AS unit_price,
  COALESCE(i.supply_mode,'self_purchased') AS supply_mode, COALESCE(i.currency,'CNY') AS currency,
  i.tax_inclusive,CAST(COALESCE(hq.confirmed_quantity,0) AS UNSIGNED) AS confirmed_quantity,CAST(COALESCE(NULLIF(i.production_quantity,0),i.quantity)-COALESCE(i.scrap_quantity,0)-COALESCE(hq.confirmed_quantity,0) AS UNSIGNED) AS remaining_quantity`).Order("i.completion_date DESC,i.id DESC").Offset((page - 1) * 50).Limit(50).Find(&rows).Error
 	if err != nil {
@@ -69,15 +69,15 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 		return
 	}
 	var req struct {
-		ItemID         int64  `json:"order_item_id"`
-		Quantity       int    `json:"qualified_quantity"`
-		Date           string `json:"business_date"`
-		ExpectedPrice  string `json:"expected_price"`
-		Notes          string `json:"notes"`
-		Reviewed       bool   `json:"reviewed"`
-		SourceRef      string `json:"source_ref"`
-		RequestID      string `json:"request_id"`
-		ConfirmedPrice string `json:"confirmed_price"`
+		ItemID         int64   `json:"order_item_id"`
+		Quantity       int     `json:"qualified_quantity"`
+		Date           string  `json:"business_date"`
+		ExpectedPrice  *string `json:"expected_price"`
+		Notes          string  `json:"notes"`
+		Reviewed       bool    `json:"reviewed"`
+		SourceRef      string  `json:"source_ref"`
+		RequestID      string  `json:"request_id"`
+		ConfirmedPrice string  `json:"confirmed_price"`
 	}
 	if c.ShouldBindJSON(&req) != nil || !req.Reviewed || req.ItemID <= 0 || req.Quantity <= 0 || utf8.RuneCountInString(req.Notes) > 500 {
 		response.BadRequest(c, response.CodeInvalidRequest, "请核对合格数量、日期、单价；备注最多500字")
@@ -159,7 +159,11 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 		response.BadRequest(c, response.CodeInvalidRequest, "仅可导入历史已完工或已交货零件")
 		return
 	}
-	if !sameDecimal(item.UnitPrice, req.ExpectedPrice) || item.Currency != "CNY" {
+	expectedPrice := "0"
+	if req.ExpectedPrice != nil && strings.TrimSpace(*req.ExpectedPrice) != "" {
+		expectedPrice = strings.TrimSpace(*req.ExpectedPrice)
+	}
+	if !sameDecimal(item.UnitPrice, expectedPrice) || item.Currency != "CNY" {
 		response.BadRequest(c, response.CodeInvalidRequest, "单价缺失、已变化或币种不是人民币，请刷新并核对订单")
 		return
 	}
@@ -196,7 +200,7 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 				response.BadRequest(c, response.CodeInvalidRequest, "原始批次依据编号已使用，内容不一致；请核对原始记录")
 				return
 			}
-			response.SuccessWithMessage(c, "该历史批次已导入，无需重复记账", gin.H{"completion_no": number})
+			historyImportResult(c, number, existing.PricingStatus, true)
 			return
 		}
 		if err != gorm.ErrRecordNotFound {
@@ -219,6 +223,10 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 		return
 	}
 	billable := max(0, min(float64(req.Quantity), float64(item.Quantity)-prior.Billable))
+	if !accounting.OutputAmountFits(int64(billable), price) {
+		response.BadRequest(c, response.CodeInvalidRequest, "本批产值金额超过系统可保存上限，请核对数量与单价")
+		return
+	}
 	err = tx.Exec(`INSERT INTO production_completions (corp_id,order_id,order_item_id,completion_no,business_date,qualified_quantity,billable_quantity,unit_price_snapshot,output_value,supply_mode_snapshot,currency,tax_inclusive,status,pricing_status,notes,created_by,confirmed_at,created_at)
  VALUES (?,?,?,?,?,?,?,?,ROUND(?*CAST(? AS DECIMAL(15,4)),2),?,?,?,'confirmed',?,?,?,NOW(3),NOW(3))`, corpID, item.OrderID, req.ItemID, number, req.Date, req.Quantity, billable, price, billable, price, item.SupplyMode, item.Currency, item.TaxInclusive, pricingStatus, notes, middleware.GetUserID(c)).Error
 	if err != nil {
@@ -249,7 +257,18 @@ func (h *ProductionFinanceHandler) ImportHistory(c *gin.Context) {
 		response.InternalError(c, response.CodeInternal, "提交历史导入失败")
 		return
 	}
-	response.SuccessWithMessage(c, "历史完工已审核计入产值", gin.H{"completion_no": number})
+	historyImportResult(c, number, pricingStatus, false)
+}
+
+func historyImportResult(c *gin.Context, number, pricingStatus string, replayed bool) {
+	message := "历史合格数量已登记，金额待补价；补价后归原完工月份"
+	if pricingStatus == "priced" {
+		message = "历史完工已计入产值，请在原完工月份查看"
+	}
+	if replayed {
+		message = "该批次已保存，无需重复登记。" + message
+	}
+	response.SuccessWithMessage(c, message, gin.H{"completion_no": number, "pricing_status": pricingStatus})
 }
 
 func (h *ProductionFinanceHandler) FinanceDetails(c *gin.Context) {

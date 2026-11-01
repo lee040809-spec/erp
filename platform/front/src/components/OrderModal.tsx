@@ -43,7 +43,7 @@ interface OrderModalProps {
   customerDropdownRef: React.RefObject<HTMLDivElement>;
   formErrors: FormErrors;
   setFormErrors: (errors: FormErrors) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (e: React.FormEvent, onSaved?: () => void) => void | Promise<void>;
   isSaving: boolean;
   hideCostFields?: boolean; // 生产成本和外协费用
   hidePriceFields?: boolean; // 订单价格按订单管理权限独立控制
@@ -75,7 +75,7 @@ const OrderModal: React.FC<OrderModalProps> = (p) => {
       errorRef.current?.scrollIntoView?.({ block: "center" });
     }
   }, [show, formErrors]);
-  const draft = useOrderDraft(show, newOrder, isSaving);
+  const draft = useOrderDraft(show, newOrder);
   const close = () => {
     if (guard.confirmDiscard()) onClose();
   };
@@ -278,7 +278,7 @@ const OrderModal: React.FC<OrderModalProps> = (p) => {
               });
               return;
             }
-            onSubmit(e);
+            void onSubmit(e, draft.captureSubmission());
           }}
           className="min-h-0 flex flex-col"
         >

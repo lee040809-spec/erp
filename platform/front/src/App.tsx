@@ -612,7 +612,7 @@ export default function App() {
             alert(error instanceof Error ? error.message : '删除失败');
         }
     };
-    const handleCreateOrder = async (e: React.FormEvent) => {
+    const handleCreateOrder = async (e: React.FormEvent, onSaved?: () => void) => {
         e.preventDefault();
         setFormErrors({});
         // Validate order-level dates or item-level dates
@@ -667,6 +667,7 @@ export default function App() {
             if (!response.ok) {
                 throw new Error(await response.text());
             }
+            onSaved?.();
             setShowOrderModal(false);
             setNewOrder({
                 priority: 'medium',

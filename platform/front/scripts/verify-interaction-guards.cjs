@@ -21,7 +21,7 @@ function load(file) {
     if (name === 'react-dom') return { createPortal: node => node };
     if (name === 'lucide-react') return require(root + '/node_modules/lucide-react');
     if (name.endsWith('.css')) return {};
-if(name.endsWith('/useOrderDraft'))return {useOrderDraft:()=>({available:null,message:'',markChanged(){},forget(){},restore(){}})};if(name.endsWith('/scopedStorage'))return {readScoped:(_,fallback)=>fallback,writeScoped:()=>true};    if (name.endsWith('/useDraftGuard')) return load('hooks/useDraftGuard.ts');
+if(name.endsWith('/useOrderDraft'))return {useOrderDraft:()=>({available:null,message:'',markChanged(){},forget(){},restore(){},captureSubmission(){return ()=>{}}})};if(name.endsWith('/scopedStorage'))return {readScoped:(_,fallback)=>fallback,writeScoped:()=>true};    if (name.endsWith('/useDraftGuard')) return load('hooks/useDraftGuard.ts');
     if (name.endsWith('/useAsyncResource')) return load('hooks/useAsyncResource.ts');
     if (name.endsWith('/supplierTypes')) return load('features/suppliers/supplierTypes.ts');
     if (name.endsWith('/money')) return load('utils/money.ts');
